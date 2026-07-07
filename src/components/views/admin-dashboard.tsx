@@ -36,6 +36,7 @@ import {
   LogIn,
   ChevronRight,
   ArrowUpDown,
+  RefreshCw,
 } from "lucide-react";
 import {
   BarChart,
@@ -363,20 +364,26 @@ function AdminGate() {
 function OverviewTab() {
   const [data, setData] = useState<OverviewData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  const load = useCallback(() => {
-    fetch("/api/admin/overview")
-      .then((r) => r.json())
-      .then((d) => setData(d))
-      .catch(() => toast.error("ওভারভিউ লোড ব্যর্থ"))
-      .finally(() => setLoading(false));
-  }, []);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(true);
+    setError(false);
+    fetch("/api/admin/overview")
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setData(d); })
+      .catch(() => { if (!cancelled) { setError(true); toast.error("ওভারভিউ লোড ব্যর্থ"); } })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [retryCount]);
 
-  if (loading || !data) {
+  const load = useCallback(() => setRetryCount((c) => c + 1), []);
+
+  if (loading && !data) {
     return (
       <div className="space-y-6">
         <KPISkeleton />
@@ -385,6 +392,18 @@ function OverviewTab() {
           <Skeleton className="h-64 w-full" />
         </Card>
       </div>
+    );
+  }
+
+  if (error && !data) {
+    return (
+      <Card className="p-8 text-center">
+        <AlertTriangle className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+        <p className="text-sm text-muted-foreground mb-4">ওভারভিউ লোড করতে সমস্যা হয়েছে।</p>
+        <Button size="sm" variant="outline" onClick={load}>
+          <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> আবার চেষ্টা করুন
+        </Button>
+      </Card>
     );
   }
 

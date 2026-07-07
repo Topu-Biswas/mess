@@ -153,7 +153,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: "mess-finder-store",
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         user: s.user,
@@ -161,7 +161,7 @@ export const useAppStore = create<AppState>()(
         searchCenter: s.searchCenter,
         listView: s.listView,
       }),
-      migrate: () => null,
+      migrate: () => ({}),
     }
   )
 );

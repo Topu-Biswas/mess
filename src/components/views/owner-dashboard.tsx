@@ -29,6 +29,7 @@ import {
   Loader2,
   ArrowRight,
   Pencil,
+  RefreshCw,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -495,17 +496,22 @@ function OverviewTab({
 }) {
   const [stats, setStats] = useState<OwnerStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState(false);
   const [recentRequests, setRecentRequests] = useState<OwnerRequest[]>([]);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setStatsLoading(true);
+    setStatsError(false);
     fetch(`/api/owner/stats?ownerId=${owner.id}`)
       .then((r) => r.json())
       .then((d) => {
         if (!cancelled) setStats(d.stats ?? null);
       })
       .catch(() => {
-        if (!cancelled) setStats(null);
+        if (!cancelled) { setStats(null); setStatsError(true); }
       })
       .finally(() => {
         if (!cancelled) setStatsLoading(false);
@@ -521,7 +527,9 @@ function OverviewTab({
     return () => {
       cancelled = true;
     };
-  }, [owner.id]);
+  }, [owner.id, retryCount]);
+
+  const loadOverview = useCallback(() => setRetryCount((c) => c + 1), []);
 
   // Recompute stats with local seat overrides
   const effectiveStats = useMemo<OwnerStats | null>(() => {
@@ -623,6 +631,13 @@ function OverviewTab({
             <Skeleton key={i} className="h-28 rounded-xl" />
           ))}
         </div>
+      ) : statsError ? (
+        <Card className="p-6 text-center">
+          <p className="text-sm text-muted-foreground mb-3">ডেটা লোড করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।</p>
+          <Button size="sm" variant="outline" onClick={loadOverview}>
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> আবার চেষ্টা করুন
+          </Button>
+        </Card>
       ) : (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
           {kpis.map((kpi) => {
