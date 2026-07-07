@@ -1,0 +1,233 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-bangla: var(--font-bangla);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.625rem;
+
+  /* Brand: emerald #00A885 -> oklch ~0.72 0.15 165 */
+  --background: oklch(0.99 0.005 165);
+  --foreground: oklch(0.21 0.02 165);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.02 165);
+
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.02 165);
+
+  --primary: oklch(0.69 0.15 165);
+  --primary-foreground: oklch(0.99 0.01 165);
+
+  --secondary: oklch(0.96 0.02 165);
+  --secondary-foreground: oklch(0.3 0.05 165);
+
+  --muted: oklch(0.96 0.01 165);
+  --muted-foreground: oklch(0.52 0.02 165);
+
+  --accent: oklch(0.93 0.05 165);
+  --accent-foreground: oklch(0.3 0.08 165);
+
+  --destructive: oklch(0.58 0.24 27);
+
+  --border: oklch(0.9 0.01 165);
+  --input: oklch(0.9 0.01 165);
+  --ring: oklch(0.69 0.15 165);
+
+  --chart-1: oklch(0.69 0.15 165);
+  --chart-2: oklch(0.7 0.18 70);
+  --chart-3: oklch(0.62 0.2 25);
+  --chart-4: oklch(0.6 0.12 250);
+  --chart-5: oklch(0.65 0.2 305);
+
+  --sidebar: oklch(0.99 0.005 165);
+  --sidebar-foreground: oklch(0.21 0.02 165);
+  --sidebar-primary: oklch(0.69 0.15 165);
+  --sidebar-primary-foreground: oklch(0.99 0.01 165);
+  --sidebar-accent: oklch(0.93 0.05 165);
+  --sidebar-accent-foreground: oklch(0.3 0.08 165);
+  --sidebar-border: oklch(0.9 0.01 165);
+  --sidebar-ring: oklch(0.69 0.15 165);
+}
+
+.dark {
+  --background: oklch(0.16 0.01 165);
+  --foreground: oklch(0.97 0.01 165);
+
+  --card: oklch(0.21 0.015 165);
+  --card-foreground: oklch(0.97 0.01 165);
+
+  --popover: oklch(0.21 0.015 165);
+  --popover-foreground: oklch(0.97 0.01 165);
+
+  --primary: oklch(0.72 0.16 165);
+  --primary-foreground: oklch(0.16 0.01 165);
+
+  --secondary: oklch(0.27 0.02 165);
+  --secondary-foreground: oklch(0.97 0.01 165);
+
+  --muted: oklch(0.27 0.02 165);
+  --muted-foreground: oklch(0.7 0.02 165);
+
+  --accent: oklch(0.3 0.04 165);
+  --accent-foreground: oklch(0.97 0.01 165);
+
+  --destructive: oklch(0.7 0.19 22);
+
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.72 0.16 165);
+
+  --chart-1: oklch(0.72 0.16 165);
+  --chart-2: oklch(0.7 0.18 70);
+  --chart-3: oklch(0.65 0.22 25);
+  --chart-4: oklch(0.62 0.15 250);
+  --chart-5: oklch(0.68 0.2 305);
+
+  --sidebar: oklch(0.21 0.015 165);
+  --sidebar-foreground: oklch(0.97 0.01 165);
+  --sidebar-primary: oklch(0.72 0.16 165);
+  --sidebar-primary-foreground: oklch(0.16 0.01 165);
+  --sidebar-accent: oklch(0.3 0.04 165);
+  --sidebar-accent-foreground: oklch(0.97 0.01 165);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.72 0.16 165);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  /* Bengali text rendering */
+  :lang(bn) {
+    font-family: var(--font-bangla), var(--font-sans), sans-serif;
+  }
+}
+
+/* Custom scrollbar for long lists */
+.scroll-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background-color: oklch(0.8 0.02 165);
+  border-radius: 3px;
+}
+.scroll-thin::-webkit-scrollbar-thumb:hover {
+  background-color: oklch(0.69 0.15 165);
+}
+
+/* Leaflet map styling overrides */
+.leaflet-container {
+  font-family: var(--font-sans), var(--font-bangla), sans-serif;
+  background: oklch(0.93 0.01 165);
+}
+.leaflet-popup-content-wrapper {
+  border-radius: 0.625rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+.leaflet-popup-content {
+  margin: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+}
+.leaflet-bar a {
+  color: oklch(0.21 0.02 165);
+}
+
+/* Custom map pin */
+.mess-pin {
+  background: transparent;
+  border: none;
+}
+.mess-pin-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 14px;
+  font-weight: 700;
+  font-size: 11px;
+  color: white;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  border: 2px solid white;
+  white-space: nowrap;
+  transition: transform 0.15s ease;
+}
+.mess-pin-inner:hover {
+  transform: scale(1.1);
+}
+.mess-pin-inner::after {
+  content: "";
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid white;
+}
+
+/* Subtle entrance animation utility */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.4s ease-out both;
+}

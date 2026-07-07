@@ -1,0 +1,46 @@
+flowchart TD
+    Start([ভিজিটর সাইটে আসে]) --> Home[হোমপেজ]
+    Home --> SearchMap[সার্চ ও ম্যাপ ডিসকভারি পেজ]
+
+    subgraph SeekerFlow["🔍 সিকার ফ্লো"]
+        SearchMap --> Filter{ফিল্টার প্রয়োগ<br/>বাজেট/দূরত্ব/ফ্যাসিলিটি}
+        Filter --> Pins[ম্যাপে রিয়েল-টাইম পিন]
+        Pins --> PinClick[পিনে ক্লিক → প্রিভিউ কার্ড]
+        PinClick --> Details[মেস ডিটেইলস পেজ<br/>সিট চার্ট দেখা]
+        Details --> BookBtn{"বুক করুন" ক্লিক}
+        BookBtn -- লগইন করা নেই --> LoginModal[লগইন/সাইনআপ মোডাল]
+        LoginModal -- সফল --> SeatSelect
+        BookBtn -- লগইন করা আছে --> SeatSelect[সিট সিলেকশন পেজ]
+        SeatSelect --> HoldSeat[সিট সাময়িক হোল্ড<br/>Pending - হলুদ]
+        HoldSeat --> SubmitReq[বুকিং রিকোয়েস্ট সাবমিট]
+        SubmitReq --> WaitOwner{মালিকের সিদ্ধান্ত}
+        WaitOwner -- Approve --> Confirmed[Confirmed - সবুজ<br/>কন্টাক্ট নম্বর আনলক]
+        WaitOwner -- Reject --> Released[সিট রিলিজ<br/>Available - সবুজ]
+        Confirmed --> Dashboard1[সিকার ড্যাশবোর্ড<br/>বুকিং ট্র্যাক করা]
+        Details -- সরাসরি যোগাযোগ --> ContactOwner[কল/WhatsApp<br/>লগইন প্রয়োজন]
+    end
+
+    subgraph OwnerFlow["🏠 মেস মালিক ফ্লো"]
+        OwnerSignup[মালিক সাইনআপ +<br/>NID/লাইসেন্স আপলোড] --> PendingVerify[Pending Verification]
+        PendingVerify --> AdminReview{এডমিন রিভিউ}
+        AdminReview -- Approve --> OwnerDash[মালিক ড্যাশবোর্ড]
+        AdminReview -- Reject --> OwnerRejected[রিজেক্টেড - কারণসহ নোটিফিকেশন]
+        OwnerDash --> AddMess[মেস যোগ করা<br/>ম্যাপ পিন + ছবি + ফ্যাসিলিটি]
+        AddMess --> AddRooms[রুম ও সিট যোগ করা]
+        AddRooms --> LiveOnMap[মেস লাইভ - ম্যাপে দৃশ্যমান]
+        LiveOnMap --> Inbox[বুকিং রিকোয়েস্ট ইনবক্স]
+        Inbox --> WaitOwner
+        OwnerDash --> ManageTenants[টেন্যান্ট ম্যানেজমেন্ট]
+        OwnerDash --> Reports[আয়-ব্যয় রিপোর্ট]
+    end
+
+    subgraph AdminFlow["🛡️ এডমিন ফ্লো"]
+        AdminPanel[এডমিন ড্যাশবোর্ড] --> VerifyOwners[মালিক ভেরিফিকেশন কিউ]
+        VerifyOwners --> AdminReview
+        AdminPanel --> ModQueue[Reported Listings কিউ]
+        ModQueue --> FixFake[ফেক ডেটা এডিট/আনপাবলিশ]
+        AdminPanel --> UserMgmt[ইউজার ম্যানেজমেন্ট<br/>ব্লক/আনব্লক]
+        AdminPanel --> SiteConfig[সাইট কনফিগারেশন]
+    end
+
+    Details -- "রিপোর্ট করুন" --> ModQueue
