@@ -1,10 +1,10 @@
 // Firebase client-side initialization
 // IMPORTANT: This file is client-only. Never import in server components.
+// NOTE: Storage removed — we use external image URLs only (no paid Firebase plan needed).
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAnalytics, isSupported, type Analytics } from "firebase/analytics";
 import { getAuth, GoogleAuthProvider, type Auth } from "firebase/auth";
 import { getMessaging, type Messaging } from "firebase/messaging";
-import { getStorage, type FirebaseStorage } from "firebase/storage";
 
 export const firebaseConfig = {
   apiKey: "AIzaSyBafnOMgJnV1y4oc2rkcToTWl5GbHw4JIo",
@@ -21,7 +21,6 @@ let app: FirebaseApp | null = null;
 let analyticsInstance: Analytics | null = null;
 let authInstance: Auth | null = null;
 let messagingInstance: Messaging | null = null;
-let storageInstance: FirebaseStorage | null = null;
 
 if (typeof window !== "undefined" && getApps().length === 0) {
   app = initializeApp(firebaseConfig);
@@ -64,13 +63,6 @@ export async function getFirebaseMessaging(): Promise<Messaging | null> {
   } catch {
     return null;
   }
-}
-
-// Storage
-export function getFirebaseStorage(): FirebaseStorage | null {
-  if (typeof window === "undefined" || !app) return null;
-  if (!storageInstance) storageInstance = getStorage(app);
-  return storageInstance;
 }
 
 export { app };

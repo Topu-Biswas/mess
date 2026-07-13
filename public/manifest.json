@@ -1,0 +1,67 @@
+{
+  "name": "মেস ফাইন্ডার — Mess Finder",
+  "short_name": "মেস ফাইন্ডার",
+  "description": "এলাকাভিত্তিক মেস ও হোস্টেল খুঁজুন ও বুক করুন। ম্যাপে রিয়েল-টাইম সিট অ্যাভেইলেবিলিটি ও সরাসরি বুকিং সুবিধা।",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FAFFFE",
+  "theme_color": "#00A885",
+  "lang": "bn",
+  "dir": "ltr",
+  "categories": ["lifestyle", "house", "travel"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-256.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "মেস খুঁজুন",
+      "short_name": "সার্চ",
+      "description": "ম্যাপে এলাকা ভিত্তিক মেস খুঁজুন",
+      "url": "/?view=search",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "আমার ড্যাশবোর্ড",
+      "short_name": "ড্যাশবোর্ড",
+      "description": "আপনার বুকিং ও প্রোফাইল",
+      "url": "/?view=dashboard",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

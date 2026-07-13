@@ -17,6 +17,7 @@ import { HowItWorksView } from "@/components/views/how-it-works";
 import { ContactView } from "@/components/views/contact";
 import { Toaster } from "@/components/ui/sonner";
 import { FirebaseProvider } from "@/components/firebase-provider";
+import { PWAInstall } from "@/components/pwa-install";
 
 export default function Home() {
   const view = useAppStore((s) => s.view);
@@ -78,6 +79,7 @@ export default function Home() {
         </main>
         <Footer />
         <AuthModal />
+        <PWAInstall />
       </div>
     </FirebaseProvider>
   );

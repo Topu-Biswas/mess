@@ -441,7 +441,7 @@ function OverviewTab() {
     );
   }
 
-  const { overview: o } = data;
+  const { overview: o } = data!;
   const kpis = [
     { icon: Building2, label: "মোট মেস", value: bn(o.totalMesses), tint: "text-emerald-600 bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300" },
     { icon: Users, label: "মোট ইউজার", value: bn(o.totalUsers), tint: "text-sky-600 bg-sky-100 dark:bg-sky-950 dark:text-sky-300" },
@@ -460,7 +460,7 @@ function OverviewTab() {
       ]
     : [];
 
-  const maxCount = Math.max(...data.areaDemand.map((d) => d.count), 1);
+  const maxCount = Math.max(...data!.areaDemand.map((d) => d.count), 1);
 
   return (
     <div className="space-y-6">
@@ -489,7 +489,7 @@ function OverviewTab() {
               <CardDescription>কোন এলাকায় সবচেয়ে বেশি মেস লিস্টেড আছে</CardDescription>
             </CardHeader>
             <CardContent>
-              {data.areaDemand.length === 0 ? (
+              {data!.areaDemand.length === 0 ? (
                 <div className="py-10 text-center text-sm text-muted-foreground">
                   কোনো এলাকার ডেটা পাওয়া যায়নি
                 </div>
@@ -497,7 +497,7 @@ function OverviewTab() {
                 <div className="h-72 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
-                      data={data.areaDemand.slice(0, 10)}
+                      data={data!.areaDemand.slice(0, 10)}
                       layout="vertical"
                       margin={{ top: 4, right: 16, bottom: 4, left: 8 }}
                     >
@@ -520,7 +520,7 @@ function OverviewTab() {
                         formatter={(v: number) => [`${bn(v)} টি মেস`, "মেস"]}
                       />
                       <Bar dataKey="count" radius={[0, 6, 6, 0]}>
-                        {data.areaDemand.slice(0, 10).map((d, i) => (
+                        {data!.areaDemand.slice(0, 10).map((d, i) => (
                           <Cell
                             key={d.area}
                             fill={i === 0 ? "oklch(0.69 0.15 165)" : "oklch(0.69 0.15 165 / 0.6)"}
@@ -576,7 +576,7 @@ function OverviewTab() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {data.areaDemand.slice(0, 8).map((d, i) => (
+                {data!.areaDemand.slice(0, 8).map((d, i) => (
                   <div key={d.area} className="flex items-center gap-3">
                     <span className="w-6 text-sm font-bold text-muted-foreground">#{bn(i + 1)}</span>
                     <span className="w-20 text-sm font-medium truncate">{d.area}</span>

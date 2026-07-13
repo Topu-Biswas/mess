@@ -102,13 +102,13 @@ export function SearchView() {
   };
 
   const onPickLocation = (lat: number, lng: number) => {
-    // find nearest known area name for the label
-    const nearest = POPULAR_AREAS.reduce(
+    type AreaWithDist = { name: string; lat: number; lng: number; d: number };
+    const nearest = POPULAR_AREAS.reduce<AreaWithDist>(
       (best, a) => {
         const d = Math.hypot(a.lat - lat, a.lng - lng);
-        return d < best.d ? { ...a, d } : best;
+        return d < best.d ? { name: a.name, lat: a.lat, lng: a.lng, d } : best;
       },
-      { name: "কাস্টম পয়েন্ট", lat: 0, lng: 0, d: Infinity } as { name: string; lat: number; lng: number; d: number }
+      { name: "কাস্টম পয়েন্ট", lat: 0, lng: 0, d: Infinity }
     );
     const label = nearest.d < 0.05 ? nearest.name : "কাস্টম পয়েন্ট";
     setSearchCenter({ lat, lng, label });
@@ -228,19 +228,36 @@ export function SearchView() {
   );
 
   return (
-    <div className="flex-1 flex flex-col h-[calc(100vh-4rem)]">
-      {/* Top floating bar */}
-      <div className="border-b bg-background/95 backdrop-blur z-20 px-4 py-2.5 flex items-center gap-2 flex-wrap">
-        <form onSubmit={handleSearch} className="relative flex-1 min-w-[180px] max-w-md">
+    <div className="flex-1 flex flex-col h-[calc(100vh-4rem)] md:h-[calc(100vh-4rem)]">
+      {/* Top bar — mobile: compact + search prominent; desktop: full toolbar */}
+      <div className="border-b bg-background/95 backdrop-blur z-20 px-3 py-2 flex items-center gap-2">
+        <form onSubmit={handleSearch} className="relative flex-1 min-w-[140px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="এলাকা লিখুন…"
-            className="pl-9 h-9"
+            className="pl-9 h-10 text-base"
           />
         </form>
-        <Button variant="outline" size="sm" onClick={useMyLocation} className="h-9">
+        {/* Mobile: icon-only buttons, 44px touch targets */}
+        <Button variant="outline" size="icon" onClick={useMyLocation} className="h-10 w-10 shrink-0 md:hidden" aria-label="আমার লোকেশন">
+          <Navigation className="h-4 w-4" />
+        </Button>
+        <Button
+          variant={pickMode ? "default" : "outline"}
+          size="icon"
+          onClick={() => {
+            setPickMode(!pickMode);
+            if (!pickMode) toast.info("ম্যাপে যেকোনো জায়গায় ক্লিক করে আপনার লোকেশন বসান");
+          }}
+          className="h-10 w-10 shrink-0 md:hidden"
+          aria-label="ম্যাপে বসান"
+        >
+          {pickMode ? <Check className="h-4 w-4" /> : <Crosshair className="h-4 w-4" />}
+        </Button>
+        {/* Desktop: labeled buttons */}
+        <Button variant="outline" size="sm" onClick={useMyLocation} className="hidden md:inline-flex h-9">
           <Navigation className="h-3.5 w-3.5 mr-1.5" /> আমার লোকেশন
         </Button>
         <Button
@@ -250,17 +267,17 @@ export function SearchView() {
             setPickMode(!pickMode);
             if (!pickMode) toast.info("ম্যাপে যেকোনো জায়গায় ক্লিক করে আপনার লোকেশন বসান");
           }}
-          className="h-9"
+          className="hidden md:inline-flex h-9"
         >
           {pickMode ? <Check className="h-3.5 w-3.5 mr-1.5" /> : <Crosshair className="h-3.5 w-3.5 mr-1.5" />}
-          {pickMode ? "সেভ করুন" : "ম্যাপে বসান"}
+          {pickMode ? "সেভ" : "ম্যাপে বসান"}
         </Button>
         {filters.useLocation && (
-          <Button variant="ghost" size="sm" onClick={clearLocation} className="h-9 text-muted-foreground">
-            <X className="h-3.5 w-3.5 mr-1" /> লোকেশন মুছুন
+          <Button variant="ghost" size="sm" onClick={clearLocation} className="hidden md:inline-flex h-9 text-muted-foreground">
+            <X className="h-3.5 w-3.5 mr-1" /> মুছুন
           </Button>
         )}
-        <div className="flex rounded-md border overflow-hidden h-9">
+        <div className="flex rounded-md border overflow-hidden h-9 hidden md:flex">
           <button
             onClick={() => setSatellite(false)}
             className={cn("px-3 text-xs font-medium flex items-center gap-1", !satellite ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
@@ -278,21 +295,22 @@ export function SearchView() {
           variant={listView ? "outline" : "default"}
           size="sm"
           onClick={() => setListView(!listView)}
-          className="h-9"
+          className="h-9 shrink-0"
         >
-          {listView ? <MapIcon className="h-3.5 w-3.5 mr-1.5" /> : <List className="h-3.5 w-3.5 mr-1.5" />}
-          {listView ? "ম্যাপ" : "লিস্ট"}
+          {listView ? <MapIcon className="h-3.5 w-3.5 md:mr-1.5" /> : <List className="h-3.5 w-3.5 md:mr-1.5" />}
+          <span className="hidden md:inline">{listView ? "ম্যাপ" : "লিস্ট"}</span>
         </Button>
         <Button
           variant="outline"
           size="sm"
           onClick={() => setShowFiltersMobile(true)}
-          className="h-9 md:hidden"
+          className="h-9 md:hidden shrink-0"
         >
-          <SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" /> ফিল্টার
+          <SlidersHorizontal className="h-3.5 w-3.5" />
         </Button>
-        <Badge variant="secondary" className="h-9 px-3 flex items-center gap-1">
-          {loading ? "…" : messes.length} টি মেস
+        <Badge variant="secondary" className="h-9 px-3 flex items-center gap-1 shrink-0">
+          {loading ? "…" : messes.length}
+          <span className="hidden sm:inline">টি মেস</span>
         </Badge>
       </div>
 
