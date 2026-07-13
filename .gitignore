@@ -68,3 +68,6 @@ screenshot-*.png
 verify-*.png
 final-*.png
 DESIGN-GUIDE.html
+.zscripts/
+DESIGN-GUIDE.html
+firebase-auth.png

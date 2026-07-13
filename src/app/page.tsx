@@ -16,6 +16,7 @@ import { AdminDashboard } from "@/components/views/admin-dashboard";
 import { HowItWorksView } from "@/components/views/how-it-works";
 import { ContactView } from "@/components/views/contact";
 import { Toaster } from "@/components/ui/sonner";
+import { FirebaseProvider } from "@/components/firebase-provider";
 
 export default function Home() {
   const view = useAppStore((s) => s.view);
@@ -60,22 +61,24 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <Navbar />
-      <main className="flex-1 flex flex-col">
-        {view === "home" && <HomePage />}
-        {view === "search" && <SearchView />}
-        {view === "details" && <DetailsView />}
-        {view === "seat-select" && <SeatSelectView />}
-        {view === "booking-status" && <BookingStatusView />}
-        {view === "seeker-dashboard" && <SeekerDashboard />}
-        {view === "owner-dashboard" && <OwnerDashboard />}
-        {view === "admin-dashboard" && <AdminDashboard />}
-        {view === "how-it-works" && <HowItWorksView />}
-        {view === "contact" && <ContactView />}
-      </main>
-      <Footer />
-      <AuthModal />
-    </div>
+    <FirebaseProvider>
+      <div className="min-h-screen flex flex-col">
+        <Navbar />
+        <main className="flex-1 flex flex-col">
+          {view === "home" && <HomePage />}
+          {view === "search" && <SearchView />}
+          {view === "details" && <DetailsView />}
+          {view === "seat-select" && <SeatSelectView />}
+          {view === "booking-status" && <BookingStatusView />}
+          {view === "seeker-dashboard" && <SeekerDashboard />}
+          {view === "owner-dashboard" && <OwnerDashboard />}
+          {view === "admin-dashboard" && <AdminDashboard />}
+          {view === "how-it-works" && <HowItWorksView />}
+          {view === "contact" && <ContactView />}
+        </main>
+        <Footer />
+        <AuthModal />
+      </div>
+    </FirebaseProvider>
   );
 }

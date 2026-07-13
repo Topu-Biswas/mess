@@ -16,6 +16,7 @@ import { SeatBox, SeatLegend } from "@/components/seat-chart";
 import { formatTaka, VerifiedBadge } from "@/components/ui-bits";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { analyticsEvents } from "@/lib/analytics";
 
 export function SeatSelectView() {
   const { selectedMessId, selectedSeatId, selectSeat, user, setView, setLastBookingRef, openAuth } = useAppStore();
@@ -111,6 +112,9 @@ export function SeatSelectView() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      if (selectedSeat) {
+        analyticsEvents.submitBooking(selectedMessId ?? "", selectedSeat.number, selectedSeat.rent);
+      }
       toast.success("বুকিং রিকোয়েস্ট পাঠানো হয়েছে!");
       setLastBookingRef(data.reference);
       setView("booking-status");

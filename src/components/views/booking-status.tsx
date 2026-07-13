@@ -12,6 +12,8 @@ import { useAppStore } from "@/lib/store";
 import type { BookingWithRelations, BookingStatus } from "@/lib/types";
 import { formatTaka } from "@/components/ui-bits";
 import { cn } from "@/lib/utils";
+import { showLocalNotification } from "@/lib/firebase-messaging";
+import { analyticsEvents } from "@/lib/analytics";
 
 const STATUS_CONFIG: Record<BookingStatus, { label: string; icon: typeof Clock; color: string; bg: string; step: number }> = {
   PENDING: { label: "পেন্ডিং", icon: Clock, color: "text-amber-600", bg: "bg-amber-100 dark:bg-amber-950", step: 1 },
@@ -34,6 +36,14 @@ export function BookingStatusView() {
         if (cancelled) return;
         const b = (d.bookings ?? []).find((x: BookingWithRelations) => x.reference === lastBookingRef);
         setBooking(b ?? null);
+        // Fire analytics + notification for confirmed bookings
+        if (b && b.status === "CONFIRMED") {
+          analyticsEvents.bookingConfirmed(b.reference);
+          showLocalNotification(
+            "বুকিং কনফার্মড! ✅",
+            `${b.messName} — সিট ${b.seatNumber} এর বুকিং কনফার্ম হয়েছে। মালিকের নম্বর আনলক হয়েছে।`
+          );
+        }
       })
       .catch(() => {})
       .finally(() => { if (!cancelled) setFetched(true); });

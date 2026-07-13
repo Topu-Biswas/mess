@@ -9,6 +9,7 @@ import { useAppStore } from "@/lib/store";
 import { POPULAR_AREAS, type MessSummary } from "@/lib/types";
 import { MessCard } from "@/components/mess-card";
 import { Badge } from "@/components/ui/badge";
+import { analyticsEvents } from "@/lib/analytics";
 
 export function HomePage() {
   const { setView, setSearchCenter, setFilters } = useAppStore();
@@ -26,18 +27,21 @@ export function HomePage() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     const match = POPULAR_AREAS.find((a) => a.name.includes(query) || query.includes(a.name));
+    const areaName = match?.name ?? query;
     if (match) {
       setSearchCenter({ lat: match.lat, lng: match.lng, label: match.name });
       setFilters({ area: match.name });
     } else if (query) {
       setFilters({ area: query });
     }
+    analyticsEvents.searchMess(areaName || undefined);
     setView("search");
   };
 
   const handleAreaClick = (area: { name: string; lat: number; lng: number }) => {
     setSearchCenter({ lat: area.lat, lng: area.lng, label: area.name });
     setFilters({ area: area.name });
+    analyticsEvents.searchMess(area.name);
     setView("search");
   };
 

@@ -16,6 +16,7 @@ import { FacilityIcon, facilityLabel } from "@/components/facility-icon";
 import { SeatBox, SeatLegend } from "@/components/seat-chart";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { analyticsEvents } from "@/lib/analytics";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -116,6 +117,7 @@ export function DetailsView() {
       toast.info("সব সিট বুকড। ওয়েটিং লিস্টে যোগ দিন।");
       return;
     }
+    analyticsEvents.startBooking(mess.id);
     startBooking(mess.id);
   };
 

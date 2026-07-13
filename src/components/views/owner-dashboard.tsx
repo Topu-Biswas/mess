@@ -24,6 +24,7 @@ import {
   XCircle,
   Clock,
   Download,
+  Upload,
   ChevronRight,
   Home as HomeIcon,
   FileText,
@@ -69,6 +70,8 @@ import { cn } from "@/lib/utils";
 import { Rating, VerifiedBadge, formatTaka } from "@/components/ui-bits";
 import { SeatBox, SeatLegend, STATUS_CONFIG } from "@/components/seat-chart";
 import { FacilityIcon } from "@/components/facility-icon";
+import { uploadImages } from "@/lib/firebase-storage";
+import { analyticsEvents } from "@/lib/analytics";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1122,6 +1125,7 @@ function AddMessDialog({
   const [description, setDescription] = useState("");
   const [facilities, setFacilities] = useState<string[]>(["wifi", "attached_bath"]);
   const [images, setImages] = useState("");
+  const [uploadingImgs, setUploadingImgs] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const reset = () => {
@@ -1136,6 +1140,28 @@ function AddMessDialog({
     setDescription("");
     setFacilities(["wifi", "attached_bath"]);
     setImages("");
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    setUploadingImgs(true);
+    try {
+      const urls = await uploadImages(files, `messes/${owner.id}`);
+      if (urls.length > 0) {
+        const existing = images ? images.split("\n").map((s) => s.trim()).filter(Boolean) : [];
+        const combined = [...existing, ...urls];
+        setImages(combined.join("\n"));
+        toast.success(`${urls.length} টি ছবি আপলোড হয়েছে (Firebase Storage)`);
+      } else {
+        toast.error("আপলোড ব্যর্থ — Firebase Storage রুল চেক করুন");
+      }
+    } catch {
+      toast.error("ছবি আপলোডে সমস্যা");
+    } finally {
+      setUploadingImgs(false);
+      e.target.value = "";
+    }
   };
 
   const submit = async () => {
@@ -1168,6 +1194,7 @@ function AddMessDialog({
         }),
       });
       if (!res.ok) throw new Error("Failed");
+      analyticsEvents.addMess(area.trim());
       toast.success("নতুন মেস যোগ হয়েছে! এডমিন অনুমোদনের পর প্রকাশিত হবে।");
       reset();
       onCreated();
@@ -1266,11 +1293,25 @@ function AddMessDialog({
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>ছবির URL (প্রতি লাইনে একটি)</Label>
+            <div className="flex items-center justify-between">
+              <Label>মেসের ছবি</Label>
+              <label className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium cursor-pointer hover:bg-muted">
+                {uploadingImgs ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                {uploadingImgs ? "আপলোড হচ্ছে…" : "Firebase-এ আপলোড"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleFileUpload}
+                  disabled={uploadingImgs}
+                />
+              </label>
+            </div>
             <Textarea
               value={images}
               onChange={(e) => setImages(e.target.value)}
-              placeholder="https://example.com/mess1.jpg"
+              placeholder="Firebase Storage URL স্বয়ংক্রিয় এখানে আসবে। অথবা নিজে URL লিখুন (প্রতি লাইনে একটি)।"
               className="min-h-16 font-mono text-xs"
             />
           </div>
