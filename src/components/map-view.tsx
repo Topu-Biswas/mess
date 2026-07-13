@@ -113,7 +113,7 @@ export function MapView({
       center={mapCenter}
       zoom={13}
       scrollWheelZoom
-      className={cn("h-full w-full", pickMode && "cursor-crosshair")}
+      className={cn("absolute inset-0 h-full w-full", pickMode && "cursor-crosshair")}
     >
       <style>{`
         @keyframes user-pulse {

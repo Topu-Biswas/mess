@@ -228,9 +228,9 @@ export function SearchView() {
   );
 
   return (
-    <div className="flex-1 flex flex-col h-[calc(100vh-4rem)] md:h-[calc(100vh-4rem)]">
+    <div className="flex-1 flex flex-col h-[calc(100dvh-4rem)]">
       {/* Top bar — mobile: compact + search prominent; desktop: full toolbar */}
-      <div className="border-b bg-background/95 backdrop-blur z-20 px-3 py-2 flex items-center gap-2">
+      <div className="border-b bg-background/95 backdrop-blur z-20 px-3 py-2 flex items-center gap-2 shrink-0">
         <form onSubmit={handleSearch} className="relative flex-1 min-w-[140px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -314,7 +314,7 @@ export function SearchView() {
         </Badge>
       </div>
 
-      <div className="flex-1 flex relative overflow-hidden">
+      <div className="flex-1 flex relative overflow-hidden min-h-0">
         {/* Desktop filters sidebar */}
         <aside className="hidden md:block w-72 lg:w-80 shrink-0 border-r bg-background overflow-y-auto scroll-thin p-4">
           <h3 className="font-bold text-sm mb-4 flex items-center gap-1.5">
@@ -325,7 +325,7 @@ export function SearchView() {
 
         {/* Map area */}
         {!listView && (
-          <div className="flex-1 relative">
+          <div className="flex-1 relative min-h-0" style={{ minHeight: "300px" }}>
             <MapView
               messes={messes}
               searchCenter={searchCenter}

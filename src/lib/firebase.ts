@@ -1,10 +1,12 @@
 // Firebase client-side initialization
 // IMPORTANT: This file is client-only. Never import in server components.
 // NOTE: Storage removed — we use external image URLs only (no paid Firebase plan needed).
+// Services: Analytics, Auth, Messaging (FCM), Firestore (real-time chat)
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAnalytics, isSupported, type Analytics } from "firebase/analytics";
 import { getAuth, GoogleAuthProvider, type Auth } from "firebase/auth";
 import { getMessaging, type Messaging } from "firebase/messaging";
+import { getFirestore, type Firestore } from "firebase/firestore";
 
 export const firebaseConfig = {
   apiKey: "AIzaSyBafnOMgJnV1y4oc2rkcToTWl5GbHw4JIo",
@@ -21,6 +23,7 @@ let app: FirebaseApp | null = null;
 let analyticsInstance: Analytics | null = null;
 let authInstance: Auth | null = null;
 let messagingInstance: Messaging | null = null;
+let firestoreInstance: Firestore | null = null;
 
 if (typeof window !== "undefined" && getApps().length === 0) {
   app = initializeApp(firebaseConfig);
@@ -63,6 +66,13 @@ export async function getFirebaseMessaging(): Promise<Messaging | null> {
   } catch {
     return null;
   }
+}
+
+// Firestore (real-time database for chat)
+export function getFirestoreDb(): Firestore | null {
+  if (typeof window === "undefined" || !app) return null;
+  if (!firestoreInstance) firestoreInstance = getFirestore(app);
+  return firestoreInstance;
 }
 
 export { app };

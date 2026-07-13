@@ -77,7 +77,8 @@ export default function Home() {
           {view === "how-it-works" && <HowItWorksView />}
           {view === "contact" && <ContactView />}
         </main>
-        <Footer />
+        {/* Hide footer on search view (full-screen map experience) */}
+        {view !== "search" && <Footer />}
         <AuthModal />
         <PWAInstall />
       </div>

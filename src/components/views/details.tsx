@@ -17,6 +17,7 @@ import { SeatBox, SeatLegend } from "@/components/seat-chart";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { analyticsEvents } from "@/lib/analytics";
+import { RealtimeChat } from "@/components/realtime-chat";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -31,6 +32,7 @@ export function DetailsView() {
   const [fav, setFav] = useState(false);
   const [showContact, setShowContact] = useState(false);
   const [showReport, setShowReport] = useState(false);
+  const [showChat, setShowChat] = useState(false);
   const [reportText, setReportText] = useState("");
   const [favChecked, setFavChecked] = useState(false);
 
@@ -370,6 +372,17 @@ export function DetailsView() {
                   <MessageCircle className="h-3.5 w-3.5 mr-1.5" /> WhatsApp
                 </Button>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => {
+                  if (!user) { openAuth("login", "SEEKER"); return; }
+                  setShowChat(true);
+                }}
+              >
+                <MessageCircle className="h-3.5 w-3.5 mr-1.5" /> মালিকের সাথে চ্যাট করুন
+              </Button>
               {!user && (
                 <p className="text-[11px] text-muted-foreground text-center">
                   মালিকের নম্বর দেখতে লগইন করুন
@@ -469,6 +482,28 @@ export function DetailsView() {
             <Button variant="outline" onClick={() => setShowReport(false)}>বাতিল</Button>
             <Button variant="destructive" onClick={submitReport}>রিপোর্ট জমা দিন</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Real-time chat dialog (Firebase Firestore) */}
+      <Dialog open={showChat} onOpenChange={setShowChat}>
+        <DialogContent className="sm:max-w-md p-0 gap-0">
+          <DialogHeader className="p-4 border-b">
+            <DialogTitle className="text-base flex items-center gap-2">
+              <MessageCircle className="h-4 w-4 text-primary" /> মালিকের সাথে চ্যাট
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {mess.name} • রিয়েল-টাইম বার্তা (Firebase Firestore)
+            </DialogDescription>
+          </DialogHeader>
+          {user && mess && (
+            <RealtimeChat
+              chatId={`mess-${mess.id}`}
+              userId={user.id}
+              userName={user.name}
+              userRole={user.role}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>
