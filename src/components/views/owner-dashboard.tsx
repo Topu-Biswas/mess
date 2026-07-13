@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   ShieldAlert,
   TrendingUp,
+  TrendingDown,
   BedDouble,
   CircleUserRound,
   Phone,
@@ -30,6 +31,11 @@ import {
   ArrowRight,
   Pencil,
   RefreshCw,
+  AlertTriangle,
+  Receipt,
+  Banknote,
+  Coins,
+  CalendarDays,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -42,6 +48,9 @@ import {
   AreaChart,
   Area,
   Cell,
+  Legend,
+  PieChart,
+  Pie,
 } from "recharts";
 import { toast } from "sonner";
 
@@ -128,24 +137,6 @@ const BN_MONTHS = [
   "ডিসেম্বর",
 ];
 
-const BN_SHORT_MONTHS = ["জানু", "ফেব্রু", "মার্চ", "এপ্রিল", "মে", "জুন"];
-
-function addMonths(iso: string, months: number): string {
-  const d = new Date(iso);
-  d.setMonth(d.getMonth() + months);
-  return d.toISOString();
-}
-
-function messIncome(m: OwnerMess, overrides: Record<string, SeatStatus>): number {
-  let income = 0;
-  for (const r of m.rooms) {
-    for (const s of r.seats) {
-      if ((overrides[s.id] ?? s.status) === "BOOKED") income += s.rent;
-    }
-  }
-  return income;
-}
-
 // ----------------------------------------------------------------------------
 // Types
 // ----------------------------------------------------------------------------
@@ -223,6 +214,139 @@ interface OwnerReview {
   userName: string;
   ownerReply: string | null;
   createdAt: string;
+}
+
+// ----------------------------------------------------------------------------
+// Finance types (mirror of /api/owner/finance response shape)
+// ----------------------------------------------------------------------------
+
+interface FinanceMonthly {
+  month: string;
+  label: string;
+  income: number;
+  expenses: number;
+  commission: number;
+  profit: number;
+}
+
+interface FinanceExpenseByCat {
+  category: string;
+  amount: number;
+}
+
+interface FinancePerMess {
+  id: string;
+  name: string;
+  income: number;
+  expenses: number;
+  net: number;
+}
+
+interface FinanceRecentPayment {
+  id: string;
+  amount: number;
+  type: string;
+  status: string;
+  month: string;
+  method: string | null;
+  seekerName: string;
+  seekerPhone: string;
+  messName: string;
+  seatNumber: string;
+  dueDate: string;
+  paidDate: string | null;
+}
+
+interface FinanceOverdueItem {
+  id: string;
+  amount: number;
+  month: string;
+  seekerName: string;
+  seekerPhone: string;
+  messName: string;
+  seatNumber: string;
+  dueDate: string;
+}
+
+interface FinanceData {
+  ownerName: string;
+  commissionRate: number;
+  currentMonth: {
+    income: number;
+    expenses: number;
+    commission: number;
+    profit: number;
+  };
+  totals: {
+    collected: number;
+    rentIncome: number;
+    expenses: number;
+    commission: number;
+    netProfit: number;
+    overdue: number;
+    due: number;
+    overdueCount: number;
+    dueCount: number;
+  };
+  monthly: FinanceMonthly[];
+  expenseByCat: FinanceExpenseByCat[];
+  perMess: FinancePerMess[];
+  recentPayments: FinanceRecentPayment[];
+  overdueList: FinanceOverdueItem[];
+}
+
+// Expense category metadata
+const EXPENSE_CATEGORIES: { key: string; label: string; color: string }[] = [
+  { key: "UTILITY", label: "ইউটিলিটি", color: "#0ea5e9" },
+  { key: "SALARY", label: "বেতন", color: "#f59e0b" },
+  { key: "CLEANING", label: "পরিচ্ছন্নতা", color: "#10b981" },
+  { key: "SECURITY", label: "নিরাপত্তা", color: "#8b5cf6" },
+  { key: "MAINTENANCE", label: "মেইনটেন্স", color: "#ef4444" },
+  { key: "OTHER", label: "অন্যান্য", color: "#64748b" },
+];
+
+function expenseCategoryLabel(cat: string): string {
+  return EXPENSE_CATEGORIES.find((c) => c.key === cat)?.label ?? "অন্যান্য";
+}
+
+function expenseCategoryColor(cat: string): string {
+  return EXPENSE_CATEGORIES.find((c) => c.key === cat)?.color ?? "#64748b";
+}
+
+const PAYMENT_STATUS_META: Record<
+  string,
+  { label: string; cls: string }
+> = {
+  PAID: {
+    label: "পরিশোধিত",
+    cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  },
+  DUE: {
+    label: "বকেয়া",
+    cls: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+  },
+  OVERDUE: {
+    label: "অতিবাহিত",
+    cls: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+  },
+  PARTIAL: {
+    label: "আংশিক",
+    cls: "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
+  },
+};
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  CASH: "নগদ",
+  BKASH: "বিকাশ",
+  NAGAD: "নগদ",
+  BANK: "ব্যাংক",
+};
+
+function paymentMonthLabel(monthKey: string): string {
+  // monthKey like "2026-01"
+  const [y, m] = monthKey.split("-").map(Number);
+  if (!y || !m) return monthKey;
+  return `${BN_MONTHS[m - 1]} ${bn(y)}`;
 }
 
 // ----------------------------------------------------------------------------
@@ -497,6 +621,7 @@ function OverviewTab({
   const [stats, setStats] = useState<OwnerStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState(false);
+  const [finance, setFinance] = useState<FinanceData | null>(null);
   const [recentRequests, setRecentRequests] = useState<OwnerRequest[]>([]);
   const [retryCount, setRetryCount] = useState(0);
 
@@ -511,10 +636,22 @@ function OverviewTab({
         if (!cancelled) setStats(d.stats ?? null);
       })
       .catch(() => {
-        if (!cancelled) { setStats(null); setStatsError(true); }
+        if (!cancelled) {
+          setStats(null);
+          setStatsError(true);
+        }
       })
       .finally(() => {
         if (!cancelled) setStatsLoading(false);
+      });
+    // Finance summary (3 months)
+    fetch(`/api/owner/finance?ownerId=${owner.id}&months=3`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled) setFinance(d.finance ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setFinance(null);
       });
     fetch(`/api/owner/requests?ownerId=${owner.id}`)
       .then((r) => r.json())
@@ -531,22 +668,19 @@ function OverviewTab({
 
   const loadOverview = useCallback(() => setRetryCount((c) => c + 1), []);
 
-  // Recompute stats with local seat overrides
+  // Recompute stats with local seat overrides (occupancy + available seats only)
   const effectiveStats = useMemo<OwnerStats | null>(() => {
     if (!stats) return null;
     let available = 0;
     let booked = 0;
     let pending = 0;
-    let income = 0;
     for (const m of messes) {
       for (const r of m.rooms) {
         for (const s of r.seats) {
           const st = seatOverrides[s.id] ?? s.status;
           if (st === "AVAILABLE") available++;
-          else if (st === "BOOKED") {
-            booked++;
-            income += s.rent;
-          } else if (st === "PENDING") pending++;
+          else if (st === "BOOKED") booked++;
+          else if (st === "PENDING") pending++;
         }
       }
     }
@@ -556,10 +690,17 @@ function OverviewTab({
       availableSeats: available,
       bookedSeats: booked,
       pendingSeats: pending,
-      monthlyIncome: income,
       occupancyRate: total ? Math.round((booked / total) * 100) : 0,
     };
   }, [stats, messes, seatOverrides]);
+
+  // Prefer finance API's current-month income; fall back to stats.monthlyIncome
+  const currentMonthIncome = finance?.currentMonth.income ?? stats?.monthlyIncome ?? 0;
+  const currentMonthExpenses = finance?.currentMonth.expenses ?? 0;
+  const currentMonthProfit = finance?.currentMonth.profit ?? currentMonthIncome;
+  const dueCount = finance
+    ? finance.totals.overdueCount + finance.totals.dueCount
+    : 0;
 
   const kpis = effectiveStats
     ? [
@@ -586,17 +727,41 @@ function OverviewTab({
         },
         {
           label: "এই মাসের আয়",
-          value: formatTaka(effectiveStats.monthlyIncome),
-          sub: "প্রতি মাসে",
+          value: formatTaka(currentMonthIncome),
+          sub: "চলতি মাসের সংগ্রহ",
           icon: Wallet,
-          tint: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+          tint: "bg-primary/10 text-primary",
+        },
+        {
+          label: "এই মাসের খরচ",
+          value: formatTaka(currentMonthExpenses),
+          sub: "চলতি মাসের ব্যয়",
+          icon: Receipt,
+          tint: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+        },
+        {
+          label: "নিট লাভ",
+          value: formatTaka(currentMonthProfit),
+          sub: currentMonthProfit >= 0 ? "লাভ" : "ক্ষতি",
+          icon: currentMonthProfit >= 0 ? TrendingUp : TrendingDown,
+          tint:
+            currentMonthProfit >= 0
+              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+              : "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+        },
+        {
+          label: "বকেয়া পেমেন্ট",
+          value: bn(dueCount),
+          sub: "অতিবাহিত + বকেয়া",
+          icon: AlertTriangle,
+          tint: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
         },
         {
           label: "নতুন রিকোয়েস্ট",
           value: bn(effectiveStats.newRequests),
           sub: "অপেক্ষমাণ বুকিং",
           icon: Inbox,
-          tint: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+          tint: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
         },
       ]
     : [];
@@ -617,6 +782,16 @@ function OverviewTab({
     });
   }, [messes, seatOverrides]);
 
+  // Mini income vs expense chart data (3 months)
+  const financeChartData = useMemo(() => {
+    if (!finance || finance.monthly.length === 0) return [];
+    return finance.monthly.map((m) => ({
+      label: m.label,
+      income: m.income,
+      expenses: m.expenses,
+    }));
+  }, [finance]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -626,8 +801,8 @@ function OverviewTab({
 
       {/* KPI cards */}
       {statsLoading ? (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
-          {[1, 2, 3, 4, 5].map((i) => (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
             <Skeleton key={i} className="h-28 rounded-xl" />
           ))}
         </div>
@@ -639,7 +814,7 @@ function OverviewTab({
           </Button>
         </Card>
       ) : (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
           {kpis.map((kpi) => {
             const Icon = kpi.icon;
             return (
@@ -700,54 +875,90 @@ function OverviewTab({
           </CardContent>
         </Card>
 
-        {/* Recent activity */}
+        {/* Income vs Expense mini-chart */}
         <Card className="p-4">
           <CardHeader className="px-0 pt-0">
-            <CardTitle className="text-base">সাম্প্রতিক কার্যক্রম</CardTitle>
-            <CardDescription>নতুন বুকিং রিকোয়েস্ট ও আপডেট</CardDescription>
+            <CardTitle className="text-base">আয় বনাম খরচ (৩ মাস)</CardTitle>
+            <CardDescription>সাম্প্রতিক মাসিক আয় (সবুজ) ও খরচ (লাল)</CardDescription>
           </CardHeader>
           <CardContent className="px-0 pb-0">
-            {recentRequests.length === 0 ? (
-              <EmptyState title="কোনো নতুন রিকোয়েস্ট নেই" desc="যখন সিকার বুকিং পাঠাবে এখানে দেখা যাবে" />
+            {financeChartData.length === 0 ? (
+              <EmptyState title="ফাইন্যান্স ডেটা লোড হচ্ছে" desc="কয়েক সেকেন্ড পর আবার দেখুন" />
             ) : (
-              <ul className="max-h-72 space-y-2 overflow-y-auto pr-1">
-                {recentRequests.slice(0, 6).map((r) => (
-                  <li
-                    key={r.id}
-                    className="flex items-start gap-3 rounded-lg border bg-background p-3"
-                  >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">
-                      {r.seekerName.slice(0, 2)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="truncate text-sm font-semibold">{r.seekerName}</p>
-                        <span className="text-[11px] text-muted-foreground">{bnDate(r.createdAt)}</span>
-                      </div>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {r.messName} • রুম {bn(r.roomNumber)} • সিট {bn(r.seatNumber)}
-                      </p>
-                      <Badge
-                        variant="secondary"
-                        className={cn(
-                          "mt-1",
-                          r.status === "PENDING" && "bg-amber-100 text-amber-700 hover:bg-amber-100",
-                          r.status === "WAITLISTED" && "bg-violet-100 text-violet-700 hover:bg-violet-100"
-                        )}
-                      >
-                        {r.status === "PENDING" ? "পেন্ডিং" : "ওয়েটলিস্টেড"}
-                      </Badge>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={financeChartData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} className="text-muted-foreground" />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${bn(Math.round(v / 1000))}k`} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: 8, border: "1px solid hsl(var(--border))", fontSize: 12 }}
+                    formatter={(v: number, name: string) => [formatTaka(v), name]}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="income" name="আয়" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                  <Bar dataKey="expenses" name="খরচ" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                </BarChart>
+              </ResponsiveContainer>
             )}
-            <Button variant="ghost" size="sm" className="mt-3 w-full" onClick={() => onNavigate("requests")}>
-              সব রিকোয়েস্ট দেখুন <ArrowRight className="h-3.5 w-3.5" />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-2 w-full"
+              onClick={() => onNavigate("income")}
+            >
+              সম্পূর্ণ ফাইন্যান্স দেখুন <ArrowRight className="h-3.5 w-3.5" />
             </Button>
           </CardContent>
         </Card>
       </div>
+
+      {/* Recent activity */}
+      <Card className="p-4">
+        <CardHeader className="px-0 pt-0">
+          <CardTitle className="text-base">সাম্প্রতিক কার্যক্রম</CardTitle>
+          <CardDescription>নতুন বুকিং রিকোয়েস্ট ও আপডেট</CardDescription>
+        </CardHeader>
+        <CardContent className="px-0 pb-0">
+          {recentRequests.length === 0 ? (
+            <EmptyState title="কোনো নতুন রিকোয়েস্ট নেই" desc="যখন সিকার বুকিং পাঠাবে এখানে দেখা যাবে" />
+          ) : (
+            <ul className="max-h-72 space-y-2 overflow-y-auto pr-1">
+              {recentRequests.slice(0, 6).map((r) => (
+                <li
+                  key={r.id}
+                  className="flex items-start gap-3 rounded-lg border bg-background p-3"
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">
+                    {r.seekerName.slice(0, 2)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate text-sm font-semibold">{r.seekerName}</p>
+                      <span className="text-[11px] text-muted-foreground">{bnDate(r.createdAt)}</span>
+                    </div>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {r.messName} • রুম {bn(r.roomNumber)} • সিট {bn(r.seatNumber)}
+                    </p>
+                    <Badge
+                      variant="secondary"
+                      className={cn(
+                        "mt-1",
+                        r.status === "PENDING" && "bg-amber-100 text-amber-700 hover:bg-amber-100",
+                        r.status === "WAITLISTED" && "bg-violet-100 text-violet-700 hover:bg-violet-100"
+                      )}
+                    >
+                      {r.status === "PENDING" ? "পেন্ডিং" : "ওয়েটলিস্টেড"}
+                    </Badge>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          <Button variant="ghost" size="sm" className="mt-3 w-full" onClick={() => onNavigate("requests")}>
+            সব রিকোয়েস্ট দেখুন <ArrowRight className="h-3.5 w-3.5" />
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -1420,10 +1631,15 @@ function TenantsTab({ messes, loading }: { messes: OwnerMess[]; loading: boolean
   const [tenants, setTenants] = useState<BookingWithRelations[]>([]);
   const [fetching, setFetching] = useState(true);
   const [checkedOut, setCheckedOut] = useState<Record<string, boolean>>({});
+  const [fetchError, setFetchError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     if (loading || messes.length === 0) return;
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFetching(true);
+    setFetchError(false);
     Promise.all(
       messes.map((m) =>
         fetch(`/api/bookings?messId=${m.id}&status=CONFIRMED`)
@@ -1436,13 +1652,16 @@ function TenantsTab({ messes, loading }: { messes: OwnerMess[]; loading: boolean
         if (cancelled) return;
         setTenants(arrs.flat());
       })
+      .catch(() => {
+        if (!cancelled) setFetchError(true);
+      })
       .finally(() => {
         if (!cancelled) setFetching(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [messes, loading]);
+  }, [messes, loading, retryCount]);
 
   if (loading || (fetching && messes.length > 0)) {
     return (
@@ -1453,14 +1672,64 @@ function TenantsTab({ messes, loading }: { messes: OwnerMess[]; loading: boolean
     );
   }
 
+  if (fetchError) {
+    return (
+      <Card className="p-6 text-center">
+        <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-rose-500" />
+        <p className="mb-3 text-sm text-muted-foreground">টেন্যান্ট ডেটা লোড করতে সমস্যা হয়েছে।</p>
+        <Button size="sm" variant="outline" onClick={() => setRetryCount((c) => c + 1)}>
+          <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> আবার চেষ্টা করুন
+        </Button>
+      </Card>
+    );
+  }
+
+  // Compute summary stats
+  const totalRent = tenants.reduce((s, t) => s + (t.agreedRent || t.rent), 0);
+  const totalDeposit = tenants.reduce((s, t) => s + (t.securityDeposit || 0), 0);
+  const activeCount = tenants.filter((t) => !checkedOut[t.id]).length;
+  const checkedOutCount = tenants.length - activeCount;
+
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="text-xl font-bold">বর্তমান টেন্যান্ট</h2>
-        <p className="text-sm text-muted-foreground">
-          মোট {bn(tenants.length)} জন সক্রিয় টেন্যান্ট • কনফার্মড বুকিং
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold">বর্তমান টেন্যান্ট</h2>
+          <p className="text-sm text-muted-foreground">
+            মোট {bn(tenants.length)} জন টেন্যান্ট • {bn(activeCount)} সক্রিয় • {bn(checkedOutCount)} চেকআউট
+          </p>
+        </div>
       </div>
+
+      {/* Summary KPIs */}
+      {tenants.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+          <Card className="gap-2 p-4">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Users className="h-4 w-4 text-primary" /> সক্রিয় টেন্যান্ট
+            </div>
+            <div className="text-2xl font-bold text-primary">{bn(activeCount)}</div>
+          </Card>
+          <Card className="gap-2 p-4">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Wallet className="h-4 w-4 text-emerald-600" /> মাসিক ভাড়া (মোট)
+            </div>
+            <div className="text-2xl font-bold">{formatTaka(totalRent)}</div>
+          </Card>
+          <Card className="gap-2 p-4">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Banknote className="h-4 w-4 text-amber-600" /> সিকিউরিটি ডিপোজিট
+            </div>
+            <div className="text-2xl font-bold">{formatTaka(totalDeposit)}</div>
+          </Card>
+          <Card className="gap-2 p-4">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <CheckCircle2 className="h-4 w-4 text-violet-600" /> চেকআউট হয়েছে
+            </div>
+            <div className="text-2xl font-bold">{bn(checkedOutCount)}</div>
+          </Card>
+        </div>
+      )}
 
       {tenants.length === 0 ? (
         <EmptyState
@@ -1469,67 +1738,104 @@ function TenantsTab({ messes, loading }: { messes: OwnerMess[]; loading: boolean
         />
       ) : (
         <Card className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>টেন্যান্ট</TableHead>
-                <TableHead>মেস / সিট</TableHead>
-                <TableHead className="hidden md:table-cell">ইন-তারিখ</TableHead>
-                <TableHead>পরবর্তী পেমেন্ট</TableHead>
-                <TableHead className="text-right">অ্যাকশন</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {tenants.map((t) => {
-                const isOut = checkedOut[t.id];
-                const nextPay = addMonths(t.moveInDate, 1);
-                return (
-                  <TableRow key={t.id} className={isOut ? "opacity-50" : ""}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">
-                          {t.seekerName.slice(0, 2)}
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>টেন্যান্ট</TableHead>
+                  <TableHead>মেস / সিট</TableHead>
+                  <TableHead className="hidden md:table-cell">ইন-তারিখ</TableHead>
+                  <TableHead className="hidden lg:table-cell text-right">চুক্তি ভাড়া</TableHead>
+                  <TableHead className="hidden lg:table-cell text-right">ডিপোজিট</TableHead>
+                  <TableHead className="hidden sm:table-cell text-center">মাস</TableHead>
+                  <TableHead>পরবর্তী পেমেন্ট</TableHead>
+                  <TableHead>স্ট্যাটাস</TableHead>
+                  <TableHead className="text-right">অ্যাকশন</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {tenants.map((t) => {
+                  const isOut = checkedOut[t.id];
+                  const moveIn = new Date(t.moveInDate);
+                  const now = new Date();
+                  const monthsStayed = Math.max(
+                    0,
+                    (now.getFullYear() - moveIn.getFullYear()) * 12 +
+                      (now.getMonth() - moveIn.getMonth())
+                  );
+                  // Next payment due = first day of next month
+                  const nextPay = new Date(now.getFullYear(), now.getMonth() + 1, 5);
+                  const agreed = t.agreedRent || t.rent;
+                  return (
+                    <TableRow key={t.id} className={isOut ? "opacity-50" : ""}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">
+                            {t.seekerName.slice(0, 2)}
+                          </div>
+                          <div>
+                            <div className="text-sm font-semibold">{t.seekerName}</div>
+                            <div className="text-[11px] text-muted-foreground">{t.seekerPhone}</div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-sm font-semibold">{t.seekerName}</div>
-                          <div className="text-[11px] text-muted-foreground">{t.seekerPhone}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-xs">
+                          <div className="max-w-[140px] truncate font-medium">{t.messName}</div>
+                          <div className="text-muted-foreground">
+                            রুম {bn(t.roomNumber)} • সিট {bn(t.seatNumber)}
+                          </div>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-xs">
-                        <div className="font-medium">{t.messName}</div>
-                        <div className="text-muted-foreground">
-                          রুম {bn(t.roomNumber)} • সিট {bn(t.seatNumber)} • {formatTaka(t.rent)}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden text-xs md:table-cell">{bnDate(t.moveInDate)}</TableCell>
-                    <TableCell className="text-xs">
-                      <div className="font-medium text-amber-700 dark:text-amber-400">{bnDate(nextPay)}</div>
-                      <div className="text-[10px] text-muted-foreground">{formatTaka(t.rent)}</div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {isOut ? (
-                        <Badge variant="secondary" className="bg-muted">চেকআউট সম্পন্ন</Badge>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setCheckedOut({ ...checkedOut, [t.id]: true });
-                            toast.success(`${t.seekerName} চেকআউট মার্ক করা হয়েছে`);
-                          }}
-                        >
-                          <XCircle className="h-3.5 w-3.5" /> চেকআউট
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                      </TableCell>
+                      <TableCell className="hidden text-xs md:table-cell">{bnDate(t.moveInDate)}</TableCell>
+                      <TableCell className="hidden text-xs font-semibold text-emerald-700 dark:text-emerald-400 lg:table-cell text-right">
+                        {formatTaka(agreed)}
+                      </TableCell>
+                      <TableCell className="hidden text-xs text-amber-700 dark:text-amber-400 lg:table-cell text-right">
+                        {formatTaka(t.securityDeposit || 0)}
+                      </TableCell>
+                      <TableCell className="hidden text-center text-xs sm:table-cell">
+                        <Badge variant="outline" className="font-semibold">
+                          {bn(monthsStayed)} মাস
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <div className="font-medium text-amber-700 dark:text-amber-400">{bnDate(nextPay.toISOString())}</div>
+                        <div className="text-[10px] text-muted-foreground">{formatTaka(agreed)}</div>
+                      </TableCell>
+                      <TableCell>
+                        {isOut ? (
+                          <Badge variant="secondary" className="bg-muted text-muted-foreground">
+                            চেকআউট
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300">
+                            সক্রিয়
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {isOut ? (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setCheckedOut({ ...checkedOut, [t.id]: true });
+                              toast.success("চেকআউট সফল");
+                            }}
+                          >
+                            <XCircle className="h-3.5 w-3.5" /> চেকআউট
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </Card>
       )}
     </div>
@@ -1544,189 +1850,746 @@ function IncomeTab({
   owner,
   messes,
   loading,
-  seatOverrides,
 }: {
   owner: PublicUser;
   messes: OwnerMess[];
   loading: boolean;
   seatOverrides: Record<string, SeatStatus>;
 }) {
-  const [stats, setStats] = useState<OwnerStats | null>(null);
-  const [statsLoading, setStatsLoading] = useState(true);
+  const [finance, setFinance] = useState<FinanceData | null>(null);
+  const [financeLoading, setFinanceLoading] = useState(true);
+  const [financeError, setFinanceError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
+  const [recoveringId, setRecoveringId] = useState<string | null>(null);
+
+  // Local copy of overdue list so we can remove items optimistically after recovery
+  const [recoveredIds, setRecoveredIds] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/owner/stats?ownerId=${owner.id}`)
+    setFinanceLoading(true);
+    setFinanceError(false);
+    fetch(`/api/owner/finance?ownerId=${owner.id}&months=6`)
       .then((r) => r.json())
       .then((d) => {
-        if (!cancelled) setStats(d.stats ?? null);
+        if (!cancelled) setFinance(d.finance ?? null);
       })
       .catch(() => {
-        if (!cancelled) setStats(null);
+        if (!cancelled) {
+          setFinance(null);
+          setFinanceError(true);
+        }
       })
       .finally(() => {
-        if (!cancelled) setStatsLoading(false);
+        if (!cancelled) setFinanceLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [owner.id]);
+  }, [owner.id, retryCount]);
 
-  // Effective income with overrides
-  const effectiveIncome = useMemo(() => {
-    let income = 0;
-    for (const m of messes) {
-      for (const r of m.rooms) {
-        for (const s of r.seats) {
-          if ((seatOverrides[s.id] ?? s.status) === "BOOKED") income += s.rent;
-        }
+  const reload = useCallback(() => {
+    setRecoveredIds({});
+    setRetryCount((c) => c + 1);
+  }, []);
+
+  // ----- Recover overdue payment -----
+  const recoverPayment = useCallback(
+    async (paymentId: string, seekerName: string) => {
+      setRecoveringId(paymentId);
+      try {
+        const res = await fetch("/api/owner/payments", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paymentId, method: "CASH" }),
+        });
+        if (!res.ok) throw new Error("recover failed");
+        toast.success(`${seekerName} এর বকেয়া পরিশোধ সফল হয়েছে`);
+        setRecoveredIds((s) => ({ ...s, [paymentId]: true }));
+        // Refresh finance data silently
+        setTimeout(() => reload(), 600);
+      } catch {
+        toast.error("পেমেন্ট রিকভারি ব্যর্থ হয়েছে");
+      } finally {
+        setRecoveringId(null);
       }
-    }
-    return income;
-  }, [messes, seatOverrides]);
+    },
+    [reload]
+  );
 
-  const baseIncome = stats?.monthlyIncome ?? effectiveIncome;
-
-  // 6-month deterministic trend
-  const chartData = useMemo(() => {
-    const factors = [0.78, 0.82, 0.88, 0.93, 0.97, 1];
-    return BN_SHORT_MONTHS.map((m, i) => ({
-      month: m,
-      income: Math.round(baseIncome * factors[i]),
-      seats: Math.round((stats?.bookedSeats ?? 0) * factors[i]),
-    }));
-  }, [baseIncome, stats]);
-
-  const yearlyIncome = chartData.reduce((s, d) => s + d.income, 0);
-
-  const downloadCSV = () => {
-    const rows = [
-      ["মাস", "আয় (৳)", "বুকড সিট"],
-      ...chartData.map((d) => [d.month, String(d.income), String(d.seats)]),
-      ["মোট", String(yearlyIncome), ""],
+  // ----- Download monthly report CSV -----
+  const downloadReport = useCallback(() => {
+    if (!finance) return;
+    const rows: string[][] = [
+      ["মাস", "আয় (৳)", "খরচ (৳)", "কমিশন (৳)", "নিট লাভ (৳)"],
+      ...finance.monthly.map((d) => [
+        d.label,
+        String(d.income),
+        String(d.expenses),
+        String(d.commission),
+        String(d.profit),
+      ]),
+      [
+        "মোট",
+        String(finance.monthly.reduce((s, d) => s + d.income, 0)),
+        String(finance.monthly.reduce((s, d) => s + d.expenses, 0)),
+        String(finance.monthly.reduce((s, d) => s + d.commission, 0)),
+        String(finance.monthly.reduce((s, d) => s + d.profit, 0)),
+      ],
     ];
     const csv = rows.map((r) => r.join(",")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `income-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `finance-report-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success("আয়ের রিপোর্ট ডাউনলোড হচ্ছে...");
-  };
+    toast.success("মাসিক রিপোর্ট ডাউনলোড হচ্ছে...");
+  }, [finance]);
 
-  if (statsLoading) {
+  // ----- Loading skeleton -----
+  if (financeLoading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-48" />
+      <div className="space-y-5">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-10 w-56" />
+          <Skeleton className="h-9 w-40" />
+        </div>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-28 rounded-xl" />
+          ))}
+        </div>
+        <Skeleton className="h-80 rounded-xl" />
         <Skeleton className="h-72 rounded-xl" />
       </div>
     );
   }
 
+  if (financeError || !finance) {
+    return (
+      <Card className="p-6 text-center">
+        <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-rose-500" />
+        <p className="mb-3 text-sm text-muted-foreground">
+          ফাইন্যান্স ডেটা লোড করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।
+        </p>
+        <Button size="sm" variant="outline" onClick={reload}>
+          <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> আবার চেষ্টা করুন
+        </Button>
+      </Card>
+    );
+  }
+
+  const kpis = [
+    {
+      label: "এই মাসের আয়",
+      value: formatTaka(finance.currentMonth.income),
+      sub: "চলতি মাসের সংগ্রহ",
+      icon: Wallet,
+      tint: "bg-primary/10 text-primary",
+    },
+    {
+      label: "এই মাসের খরচ",
+      value: formatTaka(finance.currentMonth.expenses),
+      sub: "চলতি মাসের ব্যয়",
+      icon: Receipt,
+      tint: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+    },
+    {
+      label: "এই মাসের নিট লাভ",
+      value: formatTaka(finance.currentMonth.profit),
+      sub: finance.currentMonth.profit >= 0 ? "লাভ" : "ক্ষতি",
+      icon: finance.currentMonth.profit >= 0 ? TrendingUp : TrendingDown,
+      tint:
+        finance.currentMonth.profit >= 0
+          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+          : "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+    },
+    {
+      label: "মোট বকেয়া",
+      value: formatTaka(finance.totals.overdue + finance.totals.due),
+      sub: `${bn(finance.totals.overdueCount + finance.totals.dueCount)} টি পেমেন্ট`,
+      icon: AlertTriangle,
+      tint: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+    },
+    {
+      label: "প্ল্যাটফর্ম কমিশন",
+      value: formatTaka(finance.totals.commission),
+      sub: `${bn(finance.commissionRate)}% রেট`,
+      icon: Coins,
+      tint: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+    },
+  ];
+
+  // Expense breakdown — ensure all categories appear even if zero
+  const expenseBreakdown = EXPENSE_CATEGORIES.map((c) => {
+    const found = finance.expenseByCat.find((e) => e.category === c.key);
+    return { category: c.key, label: c.label, color: c.color, amount: found?.amount ?? 0 };
+  }).filter((e) => e.amount > 0);
+  const totalExpense = expenseBreakdown.reduce((s, e) => s + e.amount, 0);
+
+  // Per-mess totals
+  const perMessTotal = finance.perMess.reduce(
+    (acc, m) => ({
+      income: acc.income + m.income,
+      expenses: acc.expenses + m.expenses,
+      net: acc.net + m.net,
+    }),
+    { income: 0, expenses: 0, net: 0 }
+  );
+
+  const visibleOverdue = finance.overdueList.filter((o) => !recoveredIds[o.id]);
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold">আয়ের হিসাব</h2>
-          <p className="text-sm text-muted-foreground">মাসভিত্তিক আয় ও পেমেন্ট রিপোর্ট</p>
+          <h2 className="text-xl font-bold">ফাইন্যান্স ও আয়ের হিসাব</h2>
+          <p className="text-sm text-muted-foreground">
+            আয় • খরচ • কমিশন • নিট লাভ • বকেয়া — সব এক জায়গায়
+          </p>
         </div>
-        <Button variant="outline" onClick={downloadCSV}>
-          <Download className="h-4 w-4" /> রিপোর্ট ডাউনলোড (CSV)
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={downloadReport}>
+            <Download className="h-4 w-4" /> মাসিক রিপোর্ট ডাউনলোড
+          </Button>
+          <Button onClick={() => setExpenseDialogOpen(true)}>
+            <Plus className="h-4 w-4" /> খরচ যোগ করুন
+          </Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card className="gap-2 p-4">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Wallet className="h-4 w-4 text-primary" /> এই মাসের আয়
-          </div>
-          <div className="text-2xl font-bold text-primary">{formatTaka(baseIncome)}</div>
-        </Card>
-        <Card className="gap-2 p-4">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <TrendingUp className="h-4 w-4 text-emerald-600" /> ৬ মাসের আয়
-          </div>
-          <div className="text-2xl font-bold">{formatTaka(yearlyIncome)}</div>
-        </Card>
-        <Card className="gap-2 p-4">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <BedDouble className="h-4 w-4 text-amber-600" /> বুকড সিট
-          </div>
-          <div className="text-2xl font-bold">{bn(stats?.bookedSeats ?? 0)}</div>
-        </Card>
-        <Card className="gap-2 p-4">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Clock className="h-4 w-4 text-rose-600" /> পেন্ডিং পেমেন্ট
-          </div>
-          <div className="text-2xl font-bold">{formatTaka(0)}</div>
-        </Card>
-      </div>
-
-      <Card className="p-4">
-        <CardHeader className="px-0 pt-0">
-          <CardTitle className="text-base">৬ মাসের আয়ের ট্রেন্ড</CardTitle>
-          <CardDescription>শেষ ৬ মাসের মাসিক আয়ের লেখচিত্র</CardDescription>
-        </CardHeader>
-        <CardContent className="px-0 pb-0">
-          <ResponsiveContainer width="100%" height={280}>
-            <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="incomeGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#00A885" stopOpacity={0.5} />
-                  <stop offset="95%" stopColor="#00A885" stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${bn(Math.round(v / 1000))}k`} />
-              <Tooltip
-                contentStyle={{ borderRadius: 8, border: "1px solid hsl(var(--border))", fontSize: 12 }}
-                formatter={(v: number) => [formatTaka(v), "আয়"]}
-              />
-              <Area
-                type="monotone"
-                dataKey="income"
-                stroke="#00A885"
-                strokeWidth={2.5}
-                fill="url(#incomeGrad)"
-                dot={{ r: 3, fill: "#00A885" }}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      <Card className="p-4">
-        <CardHeader className="px-0 pt-0">
-          <CardTitle className="text-base">মেস অনুযায়ী মাসিক আয়</CardTitle>
-          <CardDescription>প্রতিটি মেস থেকে প্রত্যাশিত মাসিক আয়</CardDescription>
-        </CardHeader>
-        <CardContent className="px-0 pb-0">
-          {messes.length === 0 ? (
-            <EmptyState title="কোনো মেস নেই" desc="" />
-          ) : (
-            <div className="space-y-2">
-              {messes.map((m) => {
-                const income = messIncome(m, seatOverrides);
-                const max = Math.max(1, ...messes.map((mm) => messIncome(mm, seatOverrides)));
-                const pct = max ? Math.round((income / max) * 100) : 0;
-                return (
-                  <div key={m.id} className="flex items-center gap-3">
-                    <div className="w-32 shrink-0 truncate text-sm font-medium">{m.name}</div>
-                    <Progress value={pct} className="h-2 flex-1" />
-                    <div className="w-24 shrink-0 text-right text-sm font-semibold text-primary">
-                      {formatTaka(income)}
-                    </div>
-                  </div>
-                );
-              })}
+      {/* Overdue alert */}
+      {visibleOverdue.length > 0 && (
+        <Card className="border-rose-200 bg-rose-50/60 p-4 dark:border-rose-900 dark:bg-rose-950/30">
+          <div className="mb-3 flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-200">
+              <AlertTriangle className="h-5 w-5" />
             </div>
-          )}
+            <div className="min-w-0 flex-1">
+              <h3 className="font-bold text-rose-800 dark:text-rose-200">
+                {bn(visibleOverdue.length)} টি অতিবাহিত পেমেন্ট — মোট {formatTaka(visibleOverdue.reduce((s, o) => s + o.amount, 0))}
+              </h3>
+              <p className="text-xs text-rose-700/80 dark:text-rose-300/80">
+                নিচের টেন্যান্টদের পেমেন্ট অতিবাহিত হয়েছে। দ্রুত রিকভারি করুন।
+              </p>
+            </div>
+          </div>
+          <ul className="max-h-72 space-y-2 overflow-y-auto pr-1">
+            {visibleOverdue.map((o) => (
+              <li
+                key={o.id}
+                className="flex flex-wrap items-center gap-3 rounded-lg border border-rose-200 bg-background p-3 dark:border-rose-900"
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-100 text-xs font-bold text-rose-700 dark:bg-rose-900 dark:text-rose-200">
+                  {o.seekerName.slice(0, 2)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold">{o.seekerName}</div>
+                  <div className="truncate text-[11px] text-muted-foreground">
+                    <Phone className="mr-1 inline h-3 w-3" />
+                    {o.seekerPhone} • {o.messName} • সিট {bn(o.seatNumber)} • {paymentMonthLabel(o.month)}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-bold text-rose-700 dark:text-rose-300">{formatTaka(o.amount)}</div>
+                  <div className="text-[10px] text-muted-foreground">ডেডলাইন: {bnDate(o.dueDate)}</div>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => recoverPayment(o.id, o.seekerName)}
+                  disabled={recoveringId === o.id}
+                  className="bg-rose-600 hover:bg-rose-700"
+                >
+                  {recoveringId === o.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  )}
+                  রিকভার করুন
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+        {kpis.map((kpi) => {
+          const Icon = kpi.icon;
+          return (
+            <Card key={kpi.label} className="gap-3 p-4">
+              <div className="flex items-center justify-between">
+                <div className={cn("flex h-9 w-9 items-center justify-center rounded-lg", kpi.tint)}>
+                  <Icon className="h-5 w-5" />
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold leading-tight">{kpi.value}</div>
+                <div className="text-xs font-medium text-foreground">{kpi.label}</div>
+                <div className="text-[11px] text-muted-foreground">{kpi.sub}</div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Combined bar chart + profit area chart */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="p-4">
+          <CardHeader className="px-0 pt-0">
+            <CardTitle className="text-base">গত ৬ মাস: আয় বনাম খরচ বনাম কমিশন</CardTitle>
+            <CardDescription>মাসভিত্তিক আয় (সবুজ), খরচ (লাল), কমিশন (অ্যাম্বার)</CardDescription>
+          </CardHeader>
+          <CardContent className="px-0 pb-0">
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={finance.monthly} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} className="text-muted-foreground" />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${bn(Math.round(v / 1000))}k`} />
+                <Tooltip
+                  contentStyle={{ borderRadius: 8, border: "1px solid hsl(var(--border))", fontSize: 12 }}
+                  formatter={(v: number, name: string) => [formatTaka(v), name]}
+                />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Bar dataKey="income" name="আয়" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                <Bar dataKey="expenses" name="খরচ" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                <Bar dataKey="commission" name="কমিশন" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={28} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card className="p-4">
+          <CardHeader className="px-0 pt-0">
+            <CardTitle className="text-base">গত ৬ মাসের নিট লাভ ট্রেন্ড</CardTitle>
+            <CardDescription>মাসিক নিট লাভের লেখচিত্র (আয় − খরচ − কমিশন)</CardDescription>
+          </CardHeader>
+          <CardContent className="px-0 pb-0">
+            <ResponsiveContainer width="100%" height={280}>
+              <AreaChart data={finance.monthly} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="profitGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.5} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} className="text-muted-foreground" />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${bn(Math.round(v / 1000))}k`} />
+                <Tooltip
+                  contentStyle={{ borderRadius: 8, border: "1px solid hsl(var(--border))", fontSize: 12 }}
+                  formatter={(v: number) => [formatTaka(v), "নিট লাভ"]}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="profit"
+                  stroke="#10b981"
+                  strokeWidth={2.5}
+                  fill="url(#profitGrad)"
+                  dot={{ r: 3, fill: "#10b981" }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Expense breakdown + Per-mess table */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="p-4">
+          <CardHeader className="px-0 pt-0">
+            <CardTitle className="text-base">খরচের শ্রেণী অনুযায়ী বিভাজন</CardTitle>
+            <CardDescription>
+              মোট খরচ: <span className="font-semibold">{formatTaka(totalExpense)}</span>
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-0 pb-0">
+            {expenseBreakdown.length === 0 ? (
+              <EmptyState title="কোনো খরচ রেকর্ড নেই" desc="খরচ যোগ করলে এখানে দেখা যাবে" />
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie
+                      data={expenseBreakdown}
+                      dataKey="amount"
+                      nameKey="label"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={45}
+                      outerRadius={80}
+                      paddingAngle={2}
+                    >
+                      {expenseBreakdown.map((e) => (
+                        <Cell key={e.category} fill={e.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ borderRadius: 8, border: "1px solid hsl(var(--border))", fontSize: 12 }}
+                      formatter={(v: number, name: string) => [formatTaka(v), name]}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <ul className="space-y-2 self-center">
+                  {expenseBreakdown
+                    .slice()
+                    .sort((a, b) => b.amount - a.amount)
+                    .map((e) => {
+                      const pct = totalExpense > 0 ? Math.round((e.amount / totalExpense) * 100) : 0;
+                      return (
+                        <li key={e.category} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="flex items-center gap-2 font-medium">
+                              <span
+                                className="inline-block h-2.5 w-2.5 rounded-full"
+                                style={{ backgroundColor: e.color }}
+                              />
+                              {e.label}
+                            </span>
+                            <span className="font-semibold">{formatTaka(e.amount)} • {bn(pct)}%</span>
+                          </div>
+                          <Progress value={pct} className="h-1.5" />
+                        </li>
+                      );
+                    })}
+                </ul>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="p-0">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-base">মেস অনুযায়ী আয় ও খরচ</CardTitle>
+            <CardDescription>প্রতিটি মেসের মাসিক আয়, খরচ ও নিট</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>মেস</TableHead>
+                    <TableHead className="text-right">আয়</TableHead>
+                    <TableHead className="text-right">খরচ</TableHead>
+                    <TableHead className="text-right">নিট</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {finance.perMess.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center text-sm text-muted-foreground">
+                        কোনো মেস নেই
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    finance.perMess.map((m) => (
+                      <TableRow key={m.id}>
+                        <TableCell className="max-w-[160px] truncate font-medium">{m.name}</TableCell>
+                        <TableCell className="text-right text-emerald-700 dark:text-emerald-400">
+                          {formatTaka(m.income)}
+                        </TableCell>
+                        <TableCell className="text-right text-rose-700 dark:text-rose-400">
+                          {formatTaka(m.expenses)}
+                        </TableCell>
+                        <TableCell
+                          className={cn(
+                            "text-right font-semibold",
+                            m.net >= 0
+                              ? "text-emerald-700 dark:text-emerald-400"
+                              : "text-rose-700 dark:text-rose-400"
+                          )}
+                        >
+                          {formatTaka(m.net)}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                  {finance.perMess.length > 0 && (
+                    <TableRow className="bg-muted/40 font-bold">
+                      <TableCell>মোট</TableCell>
+                      <TableCell className="text-right text-emerald-700 dark:text-emerald-400">
+                        {formatTaka(perMessTotal.income)}
+                      </TableCell>
+                      <TableCell className="text-right text-rose-700 dark:text-rose-400">
+                        {formatTaka(perMessTotal.expenses)}
+                      </TableCell>
+                      <TableCell
+                        className={cn(
+                          "text-right",
+                          perMessTotal.net >= 0
+                            ? "text-emerald-700 dark:text-emerald-400"
+                            : "text-rose-700 dark:text-rose-400"
+                        )}
+                      >
+                        {formatTaka(perMessTotal.net)}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent payments table */}
+      <Card className="p-0">
+        <CardHeader className="p-4 pb-2">
+          <CardTitle className="text-base">সাম্প্রতিক পেমেন্ট</CardTitle>
+          <CardDescription>সর্বশেষ {bn(Math.min(10, finance.recentPayments.length))} টি পেমেন্ট রেকর্ড</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>টেন্যান্ট</TableHead>
+                  <TableHead className="hidden md:table-cell">মেস / সিট</TableHead>
+                  <TableHead className="hidden sm:table-cell">মাস</TableHead>
+                  <TableHead className="text-right">পরিমাণ</TableHead>
+                  <TableHead>স্ট্যাটাস</TableHead>
+                  <TableHead className="hidden md:table-cell">মাধ্যম</TableHead>
+                  <TableHead className="hidden lg:table-cell">তারিখ</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {finance.recentPayments.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
+                      কোনো পেমেন্ট রেকর্ড নেই
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  finance.recentPayments.map((p) => {
+                    const meta = PAYMENT_STATUS_META[p.status] ?? {
+                      label: p.status,
+                      cls: "bg-muted text-muted-foreground",
+                    };
+                    return (
+                      <TableRow key={p.id}>
+                        <TableCell>
+                          <div className="text-sm font-semibold">{p.seekerName}</div>
+                          <div className="text-[11px] text-muted-foreground">{p.seekerPhone}</div>
+                        </TableCell>
+                        <TableCell className="hidden text-xs md:table-cell">
+                          <div className="font-medium">{p.messName}</div>
+                          <div className="text-muted-foreground">সিট {bn(p.seatNumber)}</div>
+                        </TableCell>
+                        <TableCell className="hidden text-xs sm:table-cell">
+                          {paymentMonthLabel(p.month)}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold">{formatTaka(p.amount)}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className={meta.cls}>
+                            {meta.label}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="hidden text-xs md:table-cell">
+                          {p.method ? PAYMENT_METHOD_LABELS[p.method] ?? p.method : "—"}
+                        </TableCell>
+                        <TableCell className="hidden text-xs lg:table-cell">
+                          {p.paidDate ? bnDate(p.paidDate) : "—"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
+
+      {/* Add expense dialog */}
+      <AddExpenseDialog
+        open={expenseDialogOpen}
+        onOpenChange={setExpenseDialogOpen}
+        owner={owner}
+        messes={messes}
+        loading={loading}
+        onSaved={reload}
+      />
     </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// Add expense dialog
+// ----------------------------------------------------------------------------
+
+function AddExpenseDialog({
+  open,
+  onOpenChange,
+  owner,
+  messes,
+  loading,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  owner: PublicUser;
+  messes: OwnerMess[];
+  loading: boolean;
+  onSaved: () => void;
+}) {
+  const [messId, setMessId] = useState<string>("");
+  const [category, setCategory] = useState<string>("UTILITY");
+  const [amount, setAmount] = useState<string>("");
+  const [description, setDescription] = useState<string>("");
+  const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [recurring, setRecurring] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Reset form when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setAmount("");
+      setDescription("");
+      setRecurring(false);
+      setCategory("UTILITY");
+      setDate(new Date().toISOString().slice(0, 10));
+    }
+  }, [open]);
+
+  // Default mess when messes load
+  useEffect(() => {
+    if (open && !messId && messes.length > 0) setMessId(messes[0].id);
+  }, [open, messId, messes]);
+
+  const handleSubmit = useCallback(async () => {
+    if (!messId) {
+      toast.error("একটি মেস নির্বাচন করুন");
+      return;
+    }
+    const amt = Number(amount);
+    if (!amt || amt <= 0) {
+      toast.error("সঠিক পরিমাণ লিখুন");
+      return;
+    }
+    if (!description.trim()) {
+      toast.error("বিবরণ লিখুন");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/owner/expenses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ownerId: owner.id,
+          messId,
+          category,
+          amount: amt,
+          description: description.trim(),
+          date,
+          recurring,
+        }),
+      });
+      if (!res.ok) throw new Error("save failed");
+      toast.success("খরচ যোগ করা হয়েছে");
+      onOpenChange(false);
+      onSaved();
+    } catch {
+      toast.error("খরচ যোগ করতে সমস্যা হয়েছে");
+    } finally {
+      setSaving(false);
+    }
+  }, [messId, amount, description, category, date, recurring, owner.id, onOpenChange, onSaved]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>নতুন খরচ যোগ করুন</DialogTitle>
+          <DialogDescription>মেসের খরচের বিবরণ লিপিবদ্ধ করুন</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="exp-mess">মেস</Label>
+            <Select value={messId} onValueChange={setMessId} disabled={loading || messes.length === 0}>
+              <SelectTrigger id="exp-mess">
+                <Building2 className="h-4 w-4" />
+                <SelectValue placeholder="মেস নির্বাচন করুন" />
+              </SelectTrigger>
+              <SelectContent>
+                {messes.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="exp-cat">শ্রেণী</Label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger id="exp-cat">
+                <Receipt className="h-4 w-4" />
+                <SelectValue placeholder="শ্রেণী নির্বাচন করুন" />
+              </SelectTrigger>
+              <SelectContent>
+                {EXPENSE_CATEGORIES.map((c) => (
+                  <SelectItem key={c.key} value={c.key}>
+                    {c.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="exp-amount">পরিমাণ (৳)</Label>
+              <Input
+                id="exp-amount"
+                type="number"
+                inputMode="numeric"
+                placeholder="০"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="exp-date">তারিখ</Label>
+              <Input id="exp-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="exp-desc">বিবরণ</Label>
+            <Textarea
+              id="exp-desc"
+              placeholder="খরচের বিবরণ লিখুন"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+            />
+          </div>
+
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox checked={recurring} onCheckedChange={(v) => setRecurring(v === true)} />
+            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+            এই খরচ প্রতি মাসে আবার হয় (recurring)
+          </label>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+            বাতিল
+          </Button>
+          <Button onClick={handleSubmit} disabled={saving || loading || messes.length === 0}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            খরচ সংরক্ষণ করুন
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

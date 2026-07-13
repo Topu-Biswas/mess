@@ -37,6 +37,9 @@ import {
   ChevronRight,
   ArrowUpDown,
   RefreshCw,
+  Banknote,
+  Wallet,
+  Crown,
 } from "lucide-react";
 import {
   BarChart,
@@ -47,6 +50,8 @@ import {
   ResponsiveContainer,
   CartesianGrid,
   Cell,
+  ComposedChart,
+  Legend,
 } from "recharts";
 import { useAppStore } from "@/lib/store";
 import { toast } from "sonner";
@@ -108,6 +113,28 @@ interface OverviewData {
     totalOwners: number;
   };
   areaDemand: { area: string; count: number }[];
+}
+
+interface FinanceMonthly {
+  month: string;
+  label: string;
+  commission: number;
+  rentFlow: number;
+}
+
+interface FinanceTopOwner {
+  name: string;
+  rent: number;
+  commission: number;
+}
+
+interface FinanceData {
+  totalCommission: number;
+  monthCommission: number;
+  totalRentFlow: number;
+  monthRentFlow: number;
+  monthly: FinanceMonthly[];
+  topOwners: FinanceTopOwner[];
 }
 
 interface AdminOwner {
@@ -363,6 +390,7 @@ function AdminGate() {
 
 function OverviewTab() {
   const [data, setData] = useState<OverviewData | null>(null);
+  const [finance, setFinance] = useState<FinanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -373,9 +401,15 @@ function OverviewTab() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setError(false);
-    fetch("/api/admin/overview")
-      .then((r) => r.json())
-      .then((d) => { if (!cancelled) setData(d); })
+    Promise.all([
+      fetch("/api/admin/overview").then((r) => r.json()),
+      fetch("/api/admin/finance").then((r) => r.json()).catch(() => null),
+    ])
+      .then(([d, f]) => {
+        if (cancelled) return;
+        setData(d);
+        if (f?.finance) setFinance(f.finance as FinanceData);
+      })
       .catch(() => { if (!cancelled) { setError(true); toast.error("ওভারভিউ লোড ব্যর্থ"); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -417,11 +451,20 @@ function OverviewTab() {
     { icon: Clock, label: "পেন্ডিং মালিক", value: bn(o.pendingOwners), tint: "text-orange-600 bg-orange-100 dark:bg-orange-950 dark:text-orange-300" },
   ];
 
+  const financeKpis = finance
+    ? [
+        { icon: Percent, label: "প্ল্যাটফর্ম কমিশন", value: formatTaka(finance.totalCommission), tint: "text-emerald-600 bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300" },
+        { icon: TrendingUp, label: "এই মাসের কমিশন", value: formatTaka(finance.monthCommission), tint: "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/40 dark:text-emerald-200" },
+        { icon: Banknote, label: "মোট ভাড়া প্রবাহ", value: formatTaka(finance.totalRentFlow), tint: "text-sky-600 bg-sky-100 dark:bg-sky-950 dark:text-sky-300" },
+        { icon: Wallet, label: "এই মাসের ভাড়া প্রবাহ", value: formatTaka(finance.monthRentFlow), tint: "text-sky-600 bg-sky-50 dark:bg-sky-900/40 dark:text-sky-200" },
+      ]
+    : [];
+
   const maxCount = Math.max(...data.areaDemand.map((d) => d.count), 1);
 
   return (
     <div className="space-y-6">
-      {/* KPI grid */}
+      {/* KPI grid (existing) */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {kpis.map((k) => (
           <Card key={k.label} className="p-4 hover:shadow-md transition-shadow">
@@ -434,129 +477,270 @@ function OverviewTab() {
         ))}
       </div>
 
-      {/* User breakdown + area demand */}
-      <div className="grid lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <TrendingUp className="h-4 w-4 text-primary" /> এলাকা ভিত্তিক মেস ডিমান্ড
-            </CardTitle>
-            <CardDescription>কোন এলাকায় সবচেয়ে বেশি মেস লিস্টেড আছে</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {data.areaDemand.length === 0 ? (
-              <div className="py-10 text-center text-sm text-muted-foreground">
-                কোনো এলাকার ডেটা পাওয়া যায়নি
-              </div>
-            ) : (
-              <div className="h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={data.areaDemand.slice(0, 10)}
-                    layout="vertical"
-                    margin={{ top: 4, right: 16, bottom: 4, left: 8 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="oklch(0.92 0 0)" />
-                    <XAxis type="number" tick={{ fontSize: 11 }} stroke="oklch(0.5 0 0)" />
-                    <YAxis
-                      type="category"
-                      dataKey="area"
-                      width={80}
-                      tick={{ fontSize: 12 }}
-                      stroke="oklch(0.5 0 0)"
-                    />
-                    <Tooltip
-                      cursor={{ fill: "oklch(0.96 0 0)" }}
-                      contentStyle={{
-                        borderRadius: 8,
-                        border: "1px solid oklch(0.9 0 0)",
-                        fontSize: 12,
-                      }}
-                      formatter={(v: number) => [`${bn(v)} টি মেস`, "মেস"]}
-                    />
-                    <Bar dataKey="count" radius={[0, 6, 6, 0]}>
-                      {data.areaDemand.slice(0, 10).map((d, i) => (
-                        <Cell
-                          key={d.area}
-                          fill={i === 0 ? "oklch(0.69 0.15 165)" : "oklch(0.69 0.15 165 / 0.6)"}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {/* Two-column layout: left = area demand + breakdown, right = finance */}
+      <div className="grid lg:grid-cols-2 gap-4 items-start">
+        {/* Left column — existing */}
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <TrendingUp className="h-4 w-4 text-primary" /> এলাকা ভিত্তিক মেস ডিমান্ড
+              </CardTitle>
+              <CardDescription>কোন এলাকায় সবচেয়ে বেশি মেস লিস্টেড আছে</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {data.areaDemand.length === 0 ? (
+                <div className="py-10 text-center text-sm text-muted-foreground">
+                  কোনো এলাকার ডেটা পাওয়া যায়নি
+                </div>
+              ) : (
+                <div className="h-72 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={data.areaDemand.slice(0, 10)}
+                      layout="vertical"
+                      margin={{ top: 4, right: 16, bottom: 4, left: 8 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="oklch(0.92 0 0)" />
+                      <XAxis type="number" tick={{ fontSize: 11 }} stroke="oklch(0.5 0 0)" />
+                      <YAxis
+                        type="category"
+                        dataKey="area"
+                        width={80}
+                        tick={{ fontSize: 12 }}
+                        stroke="oklch(0.5 0 0)"
+                      />
+                      <Tooltip
+                        cursor={{ fill: "oklch(0.96 0 0)" }}
+                        contentStyle={{
+                          borderRadius: 8,
+                          border: "1px solid oklch(0.9 0 0)",
+                          fontSize: 12,
+                        }}
+                        formatter={(v: number) => [`${bn(v)} টি মেস`, "মেস"]}
+                      />
+                      <Bar dataKey="count" radius={[0, 6, 6, 0]}>
+                        {data.areaDemand.slice(0, 10).map((d, i) => (
+                          <Cell
+                            key={d.area}
+                            fill={i === 0 ? "oklch(0.69 0.15 165)" : "oklch(0.69 0.15 165 / 0.6)"}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">ইউজার ব্রেকডাউন</CardTitle>
-            <CardDescription>রোল অনুযায়ী বণ্টন</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-3">
-              <div className="flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300">
-                  <Users className="h-4 w-4" />
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">ইউজার ব্রেকডাউন</CardTitle>
+              <CardDescription>রোল অনুযায়ী বণ্টন</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300">
+                    <Users className="h-4 w-4" />
+                  </div>
+                  <span className="text-sm font-medium">সিকার</span>
                 </div>
-                <span className="text-sm font-medium">সিকার</span>
+                <span className="text-lg font-bold">{bn(o.totalSeekers)}</span>
               </div>
-              <span className="text-lg font-bold">{bn(o.totalSeekers)}</span>
-            </div>
-            <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-3">
-              <div className="flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                  <Building2 className="h-4 w-4" />
+              <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                    <Building2 className="h-4 w-4" />
+                  </div>
+                  <span className="text-sm font-medium">মেস মালিক</span>
                 </div>
-                <span className="text-sm font-medium">মেস মালিক</span>
+                <span className="text-lg font-bold">{bn(o.totalOwners)}</span>
               </div>
-              <span className="text-lg font-bold">{bn(o.totalOwners)}</span>
-            </div>
-            <div className="flex items-center justify-between rounded-lg border bg-amber-50 border-amber-200 p-3 dark:bg-amber-950/30 dark:border-amber-900">
-              <div className="flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                  <Clock className="h-4 w-4" />
+              <div className="flex items-center justify-between rounded-lg border bg-amber-50 border-amber-200 p-3 dark:bg-amber-950/30 dark:border-amber-900">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                    <Clock className="h-4 w-4" />
+                  </div>
+                  <span className="text-sm font-medium">পেন্ডিং মালিক</span>
                 </div>
-                <span className="text-sm font-medium">পেন্ডিং মালিক</span>
+                <span className="text-lg font-bold text-amber-700 dark:text-amber-300">{bn(o.pendingOwners)}</span>
               </div>
-              <span className="text-lg font-bold text-amber-700 dark:text-amber-300">{bn(o.pendingOwners)}</span>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">এলাকা র‍্যাংকিং</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {data.areaDemand.slice(0, 8).map((d, i) => (
+                  <div key={d.area} className="flex items-center gap-3">
+                    <span className="w-6 text-sm font-bold text-muted-foreground">#{bn(i + 1)}</span>
+                    <span className="w-20 text-sm font-medium truncate">{d.area}</span>
+                    <div className="flex-1 h-6 rounded bg-muted overflow-hidden">
+                      <div
+                        className="h-full bg-primary/80 rounded transition-all"
+                        style={{ width: `${(d.count / maxCount) * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-sm font-semibold w-12 text-right">{bn(d.count)}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right column — finance */}
+        <div className="space-y-4">
+          {/* Finance KPIs */}
+          {financeKpis.length > 0 && (
+            <div className="grid grid-cols-2 gap-4">
+              {financeKpis.map((k) => (
+                <Card key={k.label} className="p-4 hover:shadow-md transition-shadow">
+                  <div className={cn("flex h-10 w-10 items-center justify-center rounded-lg", k.tint)}>
+                    <k.icon className="h-5 w-5" />
+                  </div>
+                  <div className="mt-3 text-xl font-extrabold tracking-tight">{k.value}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{k.label}</div>
+                </Card>
+              ))}
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full"
-              onClick={() => (window.location.hash = "#owners")}
-            >
-              পেন্ডিং অনুমোদনে যান <ChevronRight className="h-3.5 w-3.5" />
-            </Button>
-          </CardContent>
-        </Card>
+          )}
+
+          {/* Combined commission + rent flow chart */}
+          {finance && finance.monthly.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Percent className="h-4 w-4 text-emerald-600" /> কমিশন ও ভাড়া প্রবাহ — গত ৬ মাস
+                </CardTitle>
+                <CardDescription>মাসভিত্তিক প্ল্যাটফর্ম কমিশন (সবুজ) ও ভাড়া লেনদেহ (নীল)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-72 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart
+                      data={finance.monthly}
+                      margin={{ top: 4, right: 8, bottom: 4, left: 8 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.92 0 0)" />
+                      <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="oklch(0.5 0 0)" />
+                      <YAxis
+                        yAxisId="left"
+                        tick={{ fontSize: 10 }}
+                        stroke="oklch(0.55 0.15 240)"
+                        tickFormatter={(v: number) => (v >= 1000 ? `${bn(Math.round(v / 1000))}k` : bn(v))}
+                      />
+                      <YAxis
+                        yAxisId="right"
+                        orientation="right"
+                        tick={{ fontSize: 10 }}
+                        stroke="oklch(0.69 0.15 165)"
+                        tickFormatter={(v: number) => (v >= 1000 ? `${bn(Math.round(v / 1000))}k` : bn(v))}
+                      />
+                      <Tooltip
+                        cursor={{ fill: "oklch(0.96 0 0)" }}
+                        contentStyle={{ borderRadius: 8, border: "1px solid oklch(0.9 0 0)", fontSize: 12 }}
+                        formatter={(v: number, name: string) => [formatTaka(v), name]}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                      <Bar
+                        yAxisId="left"
+                        dataKey="rentFlow"
+                        name="ভাড়া প্রবাহ"
+                        fill="oklch(0.6 0.15 240)"
+                        radius={[4, 4, 0, 0]}
+                        barSize={18}
+                      />
+                      <Bar
+                        yAxisId="right"
+                        dataKey="commission"
+                        name="কমিশন"
+                        fill="oklch(0.69 0.15 165)"
+                        radius={[4, 4, 0, 0]}
+                        barSize={18}
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Top earning owners table */}
+          {finance && finance.topOwners.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Crown className="h-4 w-4 text-amber-500" /> শীর্ষ আয়কারী মালিক
+                </CardTitle>
+                <CardDescription>ভাড়া আয় ও প্রদত্ত কমিশন ভিত্তিক শীর্ষ ৫</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="pl-4">মালিক</TableHead>
+                      <TableHead className="text-right">মোট ভাড়া</TableHead>
+                      <TableHead className="text-right">কমিশন</TableHead>
+                      <TableHead className="text-right pr-4">হার</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {finance.topOwners.map((owner, i) => {
+                      const rate = owner.rent > 0 ? (owner.commission / owner.rent) * 100 : 0;
+                      return (
+                        <TableRow key={owner.name + i}>
+                          <TableCell className="pl-4 font-medium">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={cn(
+                                  "flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold",
+                                  i === 0
+                                    ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                                    : i === 1
+                                    ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                                    : i === 2
+                                    ? "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                                    : "bg-muted text-muted-foreground"
+                                )}
+                              >
+                                {bn(i + 1)}
+                              </span>
+                              <span className="truncate">{owner.name}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">{formatTaka(owner.rent)}</TableCell>
+                          <TableCell className="text-right text-emerald-700 dark:text-emerald-300 font-semibold">
+                            {formatTaka(owner.commission)}
+                          </TableCell>
+                          <TableCell className="text-right pr-4 text-xs text-muted-foreground">
+                            {bn(parseFloat(rate.toFixed(1)))}%
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Finance loading skeleton */}
+          {!finance && !loading && (
+            <Card className="p-6 text-center">
+              <p className="text-sm text-muted-foreground">ফাইন্যান্স ডেটা লোড করা যায়নি।</p>
+              <Button size="sm" variant="outline" className="mt-2" onClick={load}>
+                <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> আবার চেষ্টা করুন
+              </Button>
+            </Card>
+          )}
+        </div>
       </div>
-
-      {/* Area demand table (alt view, mobile-friendly) */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">এলাকা র‍্যাংকিং</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {data.areaDemand.slice(0, 8).map((d, i) => (
-              <div key={d.area} className="flex items-center gap-3">
-                <span className="w-6 text-sm font-bold text-muted-foreground">#{bn(i + 1)}</span>
-                <span className="w-20 text-sm font-medium truncate">{d.area}</span>
-                <div className="flex-1 h-6 rounded bg-muted overflow-hidden">
-                  <div
-                    className="h-full bg-primary/80 rounded transition-all"
-                    style={{ width: `${(d.count / maxCount) * 100}%` }}
-                  />
-                </div>
-                <span className="text-sm font-semibold w-12 text-right">{bn(d.count)}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

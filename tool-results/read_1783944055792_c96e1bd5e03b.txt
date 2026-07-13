@@ -1,0 +1,2002 @@
+     1→     1→"use client";
+     2→     2→
+     3→     3→import { useCallback, useEffect, useMemo, useState } from "react";
+     4→     4→import {
+     5→     5→  LayoutDashboard,
+     6→     6→  Building2,
+     7→     7→  DoorOpen,
+     8→     8→  Inbox,
+     9→     9→  Users,
+    10→    10→  Wallet,
+    11→    11→  Star,
+    12→    12→  Settings as SettingsIcon,
+    13→    13→  Plus,
+    14→    14→  LogOut,
+    15→    15→  ShieldCheck,
+    16→    16→  ShieldAlert,
+    17→    17→  TrendingUp,
+    18→    18→  BedDouble,
+    19→    19→  CircleUserRound,
+    20→    20→  Phone,
+    21→    21→  MapPin,
+    22→    22→  CheckCircle2,
+    23→    23→  XCircle,
+    24→    24→  Clock,
+    25→    25→  Download,
+    26→    26→  ChevronRight,
+    27→    27→  Home as HomeIcon,
+    28→    28→  FileText,
+    29→    29→  Loader2,
+    30→    30→  ArrowRight,
+    31→    31→  Pencil,
+    32→    32→  RefreshCw,
+    33→    33→} from "lucide-react";
+    34→    34→import {
+    35→    35→  ResponsiveContainer,
+    36→    36→  BarChart,
+    37→    37→  Bar,
+    38→    38→  XAxis,
+    39→    39→  YAxis,
+    40→    40→  Tooltip,
+    41→    41→  CartesianGrid,
+    42→    42→  AreaChart,
+    43→    43→  Area,
+    44→    44→  Cell,
+    45→    45→} from "recharts";
+    46→    46→import { toast } from "sonner";
+    47→    47→
+    48→    48→import { useAppStore } from "@/lib/store";
+    49→    49→import {
+    50→    50→  FACILITIES,
+    51→    51→  MESS_TYPE_LABELS,
+    52→    52→  type BookingWithRelations,
+    53→    53→  type BookingStatus,
+    54→    54→  type MessType,
+    55→    55→  type OwnerTab,
+    56→    56→  type SeatStatus,
+    57→    57→  type PublicUser,
+    58→    58→} from "@/lib/types";
+    59→    59→import { cn } from "@/lib/utils";
+    60→    60→import { Rating, VerifiedBadge, formatTaka } from "@/components/ui-bits";
+    61→    61→import { SeatBox, SeatLegend, STATUS_CONFIG } from "@/components/seat-chart";
+    62→    62→import { FacilityIcon } from "@/components/facility-icon";
+    63→    63→
+    64→    64→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+    65→    65→import { Button } from "@/components/ui/button";
+    66→    66→import { Badge } from "@/components/ui/badge";
+    67→    67→import { Input } from "@/components/ui/input";
+    68→    68→import { Label } from "@/components/ui/label";
+    69→    69→import { Textarea } from "@/components/ui/textarea";
+    70→    70→import { Checkbox } from "@/components/ui/checkbox";
+    71→    71→import { Skeleton } from "@/components/ui/skeleton";
+    72→    72→import { Progress } from "@/components/ui/progress";
+    73→    73→import {
+    74→    74→  Select,
+    75→    75→  SelectContent,
+    76→    76→  SelectItem,
+    77→    77→  SelectTrigger,
+    78→    78→  SelectValue,
+    79→    79→} from "@/components/ui/select";
+    80→    80→import {
+    81→    81→  Dialog,
+    82→    82→  DialogContent,
+    83→    83→  DialogDescription,
+    84→    84→  DialogFooter,
+    85→    85→  DialogHeader,
+    86→    86→  DialogTitle,
+    87→    87→  DialogTrigger,
+    88→    88→} from "@/components/ui/dialog";
+    89→    89→import {
+    90→    90→  Table,
+    91→    91→  TableBody,
+    92→    92→  TableCell,
+    93→    93→  TableHead,
+    94→    94→  TableHeader,
+    95→    95→  TableRow,
+    96→    96→} from "@/components/ui/table";
+    97→    97→
+    98→    98→// ----------------------------------------------------------------------------
+    99→    99→// Helpers
+   100→   100→// ----------------------------------------------------------------------------
+   101→   101→
+   102→   102→const BN_DIGITS = "০১২৩৪৫৬৭৮৯";
+   103→   103→function bn(n: number | string): string {
+   104→   104→  return String(n).replace(/[0-9]/g, (d) => BN_DIGITS[Number(d)]);
+   105→   105→}
+   106→   106→
+   107→   107→function bnDate(iso: string): string {
+   108→   108→  try {
+   109→   109→    const d = new Date(iso);
+   110→   110→    return `${bn(d.getDate())} ${BN_MONTHS[d.getMonth()]}, ${bn(d.getFullYear())}`;
+   111→   111→  } catch {
+   112→   112→    return iso;
+   113→   113→  }
+   114→   114→}
+   115→   115→
+   116→   116→const BN_MONTHS = [
+   117→   117→  "জানুয়ারি",
+   118→   118→  "ফেব্রুয়ারি",
+   119→   119→  "মার্চ",
+   120→   120→  "এপ্রিল",
+   121→   121→  "মে",
+   122→   122→  "জুন",
+   123→   123→  "জুলাই",
+   124→   124→  "আগস্ট",
+   125→   125→  "সেপ্টেম্বর",
+   126→   126→  "অক্টোবর",
+   127→   127→  "নভেম্বর",
+   128→   128→  "ডিসেম্বর",
+   129→   129→];
+   130→   130→
+   131→   131→const BN_SHORT_MONTHS = ["জানু", "ফেব্রু", "মার্চ", "এপ্রিল", "মে", "জুন"];
+   132→   132→
+   133→   133→function addMonths(iso: string, months: number): string {
+   134→   134→  const d = new Date(iso);
+   135→   135→  d.setMonth(d.getMonth() + months);
+   136→   136→  return d.toISOString();
+   137→   137→}
+   138→   138→
+   139→   139→function messIncome(m: OwnerMess, overrides: Record<string, SeatStatus>): number {
+   140→   140→  let income = 0;
+   141→   141→  for (const r of m.rooms) {
+   142→   142→    for (const s of r.seats) {
+   143→   143→      if ((overrides[s.id] ?? s.status) === "BOOKED") income += s.rent;
+   144→   144→    }
+   145→   145→  }
+   146→   146→  return income;
+   147→   147→}
+   148→   148→
+   149→   149→// ----------------------------------------------------------------------------
+   150→   150→// Types
+   151→   151→// ----------------------------------------------------------------------------
+   152→   152→
+   153→   153→interface OwnerSeat {
+   154→   154→  id: string;
+   155→   155→  number: string;
+   156→   156→  rent: number;
+   157→   157→  type: string;
+   158→   158→  status: SeatStatus;
+   159→   159→}
+   160→   160→
+   161→   161→interface OwnerRoom {
+   162→   162→  id: string;
+   163→   163→  number: string;
+   164→   164→  seats: OwnerSeat[];
+   165→   165→}
+   166→   166→
+   167→   167→interface OwnerMess {
+   168→   168→  id: string;
+   169→   169→  name: string;
+   170→   170→  area: string;
+   171→   171→  address: string;
+   172→   172→  type: MessType;
+   173→   173→  rentFrom: number;
+   174→   174→  rentTo: number;
+   175→   175→  rating: number;
+   176→   176→  verified: boolean;
+   177→   177→  published: boolean;
+   178→   178→  featured: boolean;
+   179→   179→  lat: number;
+   180→   180→  lng: number;
+   181→   181→  image: string;
+   182→   182→  totalSeats: number;
+   183→   183→  availableSeats: number;
+   184→   184→  bookedSeats: number;
+   185→   185→  pendingSeats: number;
+   186→   186→  occupancyRate: number;
+   187→   187→  rooms: OwnerRoom[];
+   188→   188→}
+   189→   189→
+   190→   190→interface OwnerStats {
+   191→   191→  totalMesses: number;
+   192→   192→  totalSeats: number;
+   193→   193→  availableSeats: number;
+   194→   194→  bookedSeats: number;
+   195→   195→  pendingSeats: number;
+   196→   196→  occupancyRate: number;
+   197→   197→  monthlyIncome: number;
+   198→   198→  newRequests: number;
+   199→   199→}
+   200→   200→
+   201→   201→interface OwnerRequest {
+   202→   202→  id: string;
+   203→   203→  reference: string;
+   204→   204→  status: BookingStatus;
+   205→   205→  moveInDate: string;
+   206→   206→  duration: string;
+   207→   207→  message: string | null;
+   208→   208→  createdAt: string;
+   209→   209→  messId: string;
+   210→   210→  messName: string;
+   211→   211→  seatNumber: string;
+   212→   212→  roomNumber: string;
+   213→   213→  rent: number;
+   214→   214→  seekerName: string;
+   215→   215→  seekerPhone: string;
+   216→   216→  seekerId: string;
+   217→   217→}
+   218→   218→
+   219→   219→interface OwnerReview {
+   220→   220→  id: string;
+   221→   221→  rating: number;
+   222→   222→  comment: string;
+   223→   223→  userName: string;
+   224→   224→  ownerReply: string | null;
+   225→   225→  createdAt: string;
+   226→   226→}
+   227→   227→
+   228→   228→// ----------------------------------------------------------------------------
+   229→   229→// Navigation config
+   230→   230→// ----------------------------------------------------------------------------
+   231→   231→
+   232→   232→const NAV_ITEMS: { key: OwnerTab; label: string; icon: typeof LayoutDashboard }[] = [
+   233→   233→  { key: "overview", label: "ওভারভিউ", icon: LayoutDashboard },
+   234→   234→  { key: "messes", label: "আমার মেস", icon: Building2 },
+   235→   235→  { key: "rooms", label: "রুম ও সিট", icon: DoorOpen },
+   236→   236→  { key: "requests", label: "বুকিং রিকোয়েস্ট", icon: Inbox },
+   237→   237→  { key: "tenants", label: "টেন্যান্ট", icon: Users },
+   238→   238→  { key: "income", label: "আয়ের হিসাব", icon: Wallet },
+   239→   239→  { key: "reviews", label: "রিভিউ", icon: Star },
+   240→   240→  { key: "settings", label: "সেটিংস", icon: SettingsIcon },
+   241→   241→];
+   242→   242→
+   243→   243→// ----------------------------------------------------------------------------
+   244→   244→// Main component
+   245→   245→// ----------------------------------------------------------------------------
+   246→   246→
+   247→   247→export function OwnerDashboard() {
+   248→   248→  const user = useAppStore((s) => s.user);
+   249→   249→  const openAuth = useAppStore((s) => s.openAuth);
+   250→   250→  const ownerTab = useAppStore((s) => s.ownerTab);
+   251→   251→  const setOwnerTab = useAppStore((s) => s.setOwnerTab);
+   252→   252→  const logout = useAppStore((s) => s.logout);
+   253→   253→  const setView = useAppStore((s) => s.setView);
+   254→   254→  const selectedOwnerMessId = useAppStore((s) => s.selectedOwnerMessId);
+   255→   255→  const setSelectedOwnerMessId = useAppStore((s) => s.setSelectedOwnerMessId);
+   256→   256→
+   257→   257→  const [messes, setMesses] = useState<OwnerMess[]>([]);
+   258→   258→  const [messesLoading, setMessesLoading] = useState(true);
+   259→   259→  const [seatOverrides, setSeatOverrides] = useState<Record<string, SeatStatus>>({});
+   260→   260→
+   261→   261→  const fetchMesses = useCallback(async () => {
+   262→   262→    if (!user) return;
+   263→   263→    setMessesLoading(true);
+   264→   264→    try {
+   265→   265→      const res = await fetch(`/api/owner/messes?ownerId=${user.id}`);
+   266→   266→      const data = await res.json();
+   267→   267→      setMesses(data.messes ?? []);
+   268→   268→    } catch {
+   269→   269→      setMesses([]);
+   270→   270→    } finally {
+   271→   271→      setMessesLoading(false);
+   272→   272→    }
+   273→   273→  }, [user]);
+   274→   274→
+   275→   275→  useEffect(() => {
+   276→   276→    if (user?.role === "OWNER") fetchMesses();
+   277→   277→  }, [user, fetchMesses]);
+   278→   278→
+   279→   279→  // Default selected mess
+   280→   280→  useEffect(() => {
+   281→   281→    if (!selectedOwnerMessId && messes.length > 0) {
+   282→   282→      setSelectedOwnerMessId(messes[0].id);
+   283→   283→    }
+   284→   284→    if (selectedOwnerMessId && messes.length > 0 && !messes.some((m) => m.id === selectedOwnerMessId)) {
+   285→   285→      setSelectedOwnerMessId(messes[0].id);
+   286→   286→    }
+   287→   287→  }, [selectedOwnerMessId, messes, setSelectedOwnerMessId]);
+   288→   288→
+   289→   289→  // Gate screen
+   290→   290→  if (!user || user.role !== "OWNER") {
+   291→   291→    return <GateScreen onLogin={() => openAuth("login", "OWNER")} />;
+   292→   292→  }
+   293→   293→
+   294→   294→  const selectedMess =
+   295→   295→    messes.find((m) => m.id === selectedOwnerMessId) ?? messes[0] ?? null;
+   296→   296→
+   297→   297→  return (
+   298→   298→    <div className="min-h-screen bg-secondary/20">
+   299→   299→      {/* Header */}
+   300→   300→      <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur-md">
+   301→   301→        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
+   302→   302→          <div className="flex items-center gap-3 min-w-0">
+   303→   303→            <button
+   304→   304→              onClick={() => setView("home")}
+   305→   305→              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground"
+   306→   306→              aria-label="হোম"
+   307→   307→            >
+   308→   308→              <HomeIcon className="h-5 w-5" />
+   309→   309→            </button>
+   310→   310→            <div className="min-w-0">
+   311→   311→              <h1 className="truncate text-base font-bold leading-tight sm:text-lg">
+   312→   312→                মালিক ড্যাশবোর্ড
+   313→   313→              </h1>
+   314→   314→              <p className="truncate text-xs text-muted-foreground">
+   315→   315→                {user.name} • মালিক
+   316→   316→              </p>
+   317→   317→            </div>
+   318→   318→          </div>
+   319→   319→          <div className="flex items-center gap-2">
+   320→   320→            {user.status === "PENDING" ? (
+   321→   321→              <Badge className="hidden bg-amber-100 text-amber-700 hover:bg-amber-100 sm:inline-flex">
+   322→   322→                <ShieldAlert className="h-3 w-3 mr-1" /> ভেরিফিকেশন অপেক্ষমাণ
+   323→   323→              </Badge>
+   324→   324→            ) : (
+   325→   325→              <Badge className="hidden bg-emerald-100 text-emerald-700 hover:bg-emerald-100 sm:inline-flex">
+   326→   326→                <ShieldCheck className="h-3 w-3 mr-1" /> ভেরিফায়েড মালিক
+   327→   327→              </Badge>
+   328→   328→            )}
+   329→   329→            <Button variant="outline" size="sm" onClick={logout}>
+   330→   330→              <LogOut className="h-4 w-4" /> লগআউট
+   331→   331→            </Button>
+   332→   332→          </div>
+   333→   333→        </div>
+   334→   334→      </header>
+   335→   335→
+   336→   336→      <div className="mx-auto max-w-7xl gap-6 px-4 py-6 lg:grid lg:grid-cols-[260px_1fr]">
+   337→   337→        {/* Sidebar (desktop) */}
+   338→   338→        <aside className="hidden lg:sticky lg:top-20 lg:block lg:self-start">
+   339→   339→          <SidebarNav active={ownerTab} onChange={setOwnerTab} />
+   340→   340→        </aside>
+   341→   341→
+   342→   342→        {/* Mobile nav (horizontal scroll) */}
+   343→   343→        <div className="-mx-4 mb-4 px-4 lg:hidden">
+   344→   344→          <div className="flex gap-2 overflow-x-auto pb-2">
+   345→   345→            {NAV_ITEMS.map((item) => {
+   346→   346→              const Icon = item.icon;
+   347→   347→              const active = ownerTab === item.key;
+   348→   348→              return (
+   349→   349→                <button
+   350→   350→                  key={item.key}
+   351→   351→                  onClick={() => setOwnerTab(item.key)}
+   352→   352→                  className={cn(
+   353→   353→                    "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
+   354→   354→                    active
+   355→   355→                      ? "border-primary bg-primary/10 text-primary"
+   356→   356→                      : "border-border bg-background text-muted-foreground hover:bg-accent"
+   357→   357→                  )}
+   358→   358→                >
+   359→   359→                  <Icon className="h-4 w-4" />
+   360→   360→                  {item.label}
+   361→   361→                </button>
+   362→   362→              );
+   363→   363→            })}
+   364→   364→          </div>
+   365→   365→        </div>
+   366→   366→
+   367→   367→        {/* Main content */}
+   368→   368→        <main className="min-w-0">
+   369→   369→          {ownerTab === "overview" && (
+   370→   370→            <OverviewTab owner={user} messes={messes} loading={messesLoading} seatOverrides={seatOverrides} onNavigate={setOwnerTab} />
+   371→   371→          )}
+   372→   372→          {ownerTab === "messes" && (
+   373→   373→            <MessesTab
+   374→   374→              owner={user}
+   375→   375→              messes={messes}
+   376→   376→              loading={messesLoading}
+   377→   377→              onRefresh={fetchMesses}
+   378→   378→              onSelectMess={(id) => {
+   379→   379→                setSelectedOwnerMessId(id);
+   380→   380→                setOwnerTab("rooms");
+   381→   381→              }}
+   382→   382→            />
+   383→   383→          )}
+   384→   384→          {ownerTab === "rooms" && (
+   385→   385→            <RoomsTab
+   386→   386→              messes={messes}
+   387→   387→              loading={messesLoading}
+   388→   388→              selectedMess={selectedMess}
+   389→   389→              onSelectMess={setSelectedOwnerMessId}
+   390→   390→              seatOverrides={seatOverrides}
+   391→   391→              setSeatOverrides={setSeatOverrides}
+   392→   392→            />
+   393→   393→          )}
+   394→   394→          {ownerTab === "requests" && <RequestsTab owner={user} onNavigate={setOwnerTab} />}
+   395→   395→          {ownerTab === "tenants" && <TenantsTab messes={messes} loading={messesLoading} />}
+   396→   396→          {ownerTab === "income" && (
+   397→   397→            <IncomeTab owner={user} messes={messes} loading={messesLoading} seatOverrides={seatOverrides} />
+   398→   398→          )}
+   399→   399→          {ownerTab === "reviews" && (
+   400→   400→            <ReviewsTab messes={messes} loading={messesLoading} selectedMess={selectedMess} onSelectMess={setSelectedOwnerMessId} />
+   401→   401→          )}
+   402→   402→          {ownerTab === "settings" && <SettingsTab owner={user} />}
+   403→   403→        </main>
+   404→   404→      </div>
+   405→   405→    </div>
+   406→   406→  );
+   407→   407→}
+   408→   408→
+   409→   409→// ----------------------------------------------------------------------------
+   410→   410→// Gate screen
+   411→   411→// ----------------------------------------------------------------------------
+   412→   412→
+   413→   413→function GateScreen({ onLogin }: { onLogin: () => void }) {
+   414→   414→  const setView = useAppStore((s) => s.setView);
+   415→   415→  return (
+   416→   416→    <div className="flex min-h-[70vh] items-center justify-center px-4 py-12">
+   417→   417→      <Card className="max-w-md p-8 text-center">
+   418→   418→        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+   419→   419→          <Building2 className="h-8 w-8" />
+   420→   420→        </div>
+   421→   421→        <h2 className="mb-2 text-xl font-bold">মালিক ড্যাশবোর্ড</h2>
+   422→   422→        <p className="mb-6 text-sm text-muted-foreground">
+   423→   423→          এই ড্যাশবোর্ড দেখতে মেস মালিক হিসেবে লগইন করুন। ডেমো লগইন: <br />
+   424→   424→          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">01711111111</code> /{" "}
+   425→   425→          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">owner123</code>
+   426→   426→        </p>
+   427→   427→        <div className="flex flex-col gap-2">
+   428→   428→          <Button size="lg" onClick={onLogin}>
+   429→   429→            <ShieldCheck className="h-4 w-4 mr-2" /> মালিক হিসেবে লগইন করুন
+   430→   430→          </Button>
+   431→   431→          <Button variant="ghost" size="sm" onClick={() => setView("home")}>
+   432→   432→            হোম পেজে ফিরুন
+   433→   433→          </Button>
+   434→   434→        </div>
+   435→   435→      </Card>
+   436→   436→    </div>
+   437→   437→  );
+   438→   438→}
+   439→   439→
+   440→   440→// ----------------------------------------------------------------------------
+   441→   441→// Sidebar nav
+   442→   442→// ----------------------------------------------------------------------------
+   443→   443→
+   444→   444→function SidebarNav({
+   445→   445→  active,
+   446→   446→  onChange,
+   447→   447→}: {
+   448→   448→  active: OwnerTab;
+   449→   449→  onChange: (t: OwnerTab) => void;
+   450→   450→}) {
+   451→   451→  return (
+   452→   452→    <nav className="rounded-xl border bg-background p-2">
+   453→   453→      <ul className="space-y-1">
+   454→   454→        {NAV_ITEMS.map((item) => {
+   455→   455→          const Icon = item.icon;
+   456→   456→          const isActive = active === item.key;
+   457→   457→          return (
+   458→   458→            <li key={item.key}>
+   459→   459→              <button
+   460→   460→                onClick={() => onChange(item.key)}
+   461→   461→                className={cn(
+   462→   462→                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+   463→   463→                  isActive
+   464→   464→                    ? "bg-primary/10 text-primary"
+   465→   465→                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+   466→   466→                )}
+   467→   467→              >
+   468→   468→                <Icon className="h-4 w-4 shrink-0" />
+   469→   469→                <span className="flex-1 text-left">{item.label}</span>
+   470→   470→                {isActive && <ChevronRight className="h-4 w-4" />}
+   471→   471→              </button>
+   472→   472→            </li>
+   473→   473→          );
+   474→   474→        })}
+   475→   475→      </ul>
+   476→   476→    </nav>
+   477→   477→  );
+   478→   478→}
+   479→   479→
+   480→   480→// ----------------------------------------------------------------------------
+   481→   481→// Overview tab
+   482→   482→// ----------------------------------------------------------------------------
+   483→   483→
+   484→   484→function OverviewTab({
+   485→   485→  owner,
+   486→   486→  messes,
+   487→   487→  loading,
+   488→   488→  seatOverrides,
+   489→   489→  onNavigate,
+   490→   490→}: {
+   491→   491→  owner: PublicUser;
+   492→   492→  messes: OwnerMess[];
+   493→   493→  loading: boolean;
+   494→   494→  seatOverrides: Record<string, SeatStatus>;
+   495→   495→  onNavigate: (t: OwnerTab) => void;
+   496→   496→}) {
+   497→   497→  const [stats, setStats] = useState<OwnerStats | null>(null);
+   498→   498→  const [statsLoading, setStatsLoading] = useState(true);
+   499→   499→  const [statsError, setStatsError] = useState(false);
+   500→   500→  const [recentRequests, setRecentRequests] = useState<OwnerRequest[]>([]);
+   501→   501→  const [retryCount, setRetryCount] = useState(0);
+   502→   502→
+   503→   503→  useEffect(() => {
+   504→   504→    let cancelled = false;
+   505→   505→    // eslint-disable-next-line react-hooks/set-state-in-effect
+   506→   506→    setStatsLoading(true);
+   507→   507→    setStatsError(false);
+   508→   508→    fetch(`/api/owner/stats?ownerId=${owner.id}`)
+   509→   509→      .then((r) => r.json())
+   510→   510→      .then((d) => {
+   511→   511→        if (!cancelled) setStats(d.stats ?? null);
+   512→   512→      })
+   513→   513→      .catch(() => {
+   514→   514→        if (!cancelled) { setStats(null); setStatsError(true); }
+   515→   515→      })
+   516→   516→      .finally(() => {
+   517→   517→        if (!cancelled) setStatsLoading(false);
+   518→   518→      });
+   519→   519→    fetch(`/api/owner/requests?ownerId=${owner.id}`)
+   520→   520→      .then((r) => r.json())
+   521→   521→      .then((d) => {
+   522→   522→        if (!cancelled) setRecentRequests(d.requests ?? []);
+   523→   523→      })
+   524→   524→      .catch(() => {
+   525→   525→        if (!cancelled) setRecentRequests([]);
+   526→   526→      });
+   527→   527→    return () => {
+   528→   528→      cancelled = true;
+   529→   529→    };
+   530→   530→  }, [owner.id, retryCount]);
+   531→   531→
+   532→   532→  const loadOverview = useCallback(() => setRetryCount((c) => c + 1), []);
+   533→   533→
+   534→   534→  // Recompute stats with local seat overrides
+   535→   535→  const effectiveStats = useMemo<OwnerStats | null>(() => {
+   536→   536→    if (!stats) return null;
+   537→   537→    let available = 0;
+   538→   538→    let booked = 0;
+   539→   539→    let pending = 0;
+   540→   540→    let income = 0;
+   541→   541→    for (const m of messes) {
+   542→   542→      for (const r of m.rooms) {
+   543→   543→        for (const s of r.seats) {
+   544→   544→          const st = seatOverrides[s.id] ?? s.status;
+   545→   545→          if (st === "AVAILABLE") available++;
+   546→   546→          else if (st === "BOOKED") {
+   547→   547→            booked++;
+   548→   548→            income += s.rent;
+   549→   549→          } else if (st === "PENDING") pending++;
+   550→   550→        }
+   551→   551→      }
+   552→   552→    }
+   553→   553→    const total = stats.totalSeats;
+   554→   554→    return {
+   555→   555→      ...stats,
+   556→   556→      availableSeats: available,
+   557→   557→      bookedSeats: booked,
+   558→   558→      pendingSeats: pending,
+   559→   559→      monthlyIncome: income,
+   560→   560→      occupancyRate: total ? Math.round((booked / total) * 100) : 0,
+   561→   561→    };
+   562→   562→  }, [stats, messes, seatOverrides]);
+   563→   563→
+   564→   564→  const kpis = effectiveStats
+   565→   565→    ? [
+   566→   566→        {
+   567→   567→          label: "মোট সিট",
+   568→   568→          value: bn(effectiveStats.totalSeats),
+   569→   569→          sub: `${bn(effectiveStats.totalMesses)} টি মেস`,
+   570→   570→          icon: BedDouble,
+   571→   571→          tint: "bg-primary/10 text-primary",
+   572→   572→        },
+   573→   573→        {
+   574→   574→          label: "ফাঁকা সিট",
+   575→   575→          value: bn(effectiveStats.availableSeats),
+   576→   576→          sub: `${bn(effectiveStats.pendingSeats)} টি পেন্ডিং`,
+   577→   577→          icon: DoorOpen,
+   578→   578→          tint: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+   579→   579→        },
+   580→   580→        {
+   581→   581→          label: "অকুপেন্সি রেট",
+   582→   582→          value: `${bn(effectiveStats.occupancyRate)}%`,
+   583→   583→          sub: `${bn(effectiveStats.bookedSeats)} টি বুকড`,
+   584→   584→          icon: TrendingUp,
+   585→   585→          tint: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+   586→   586→        },
+   587→   587→        {
+   588→   588→          label: "এই মাসের আয়",
+   589→   589→          value: formatTaka(effectiveStats.monthlyIncome),
+   590→   590→          sub: "প্রতি মাসে",
+   591→   591→          icon: Wallet,
+   592→   592→          tint: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+   593→   593→        },
+   594→   594→        {
+   595→   595→          label: "নতুন রিকোয়েস্ট",
+   596→   596→          value: bn(effectiveStats.newRequests),
+   597→   597→          sub: "অপেক্ষমাণ বুকিং",
+   598→   598→          icon: Inbox,
+   599→   599→          tint: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+   600→   600→        },
+   601→   601→      ]
+   602→   602→    : [];
+   603→   603→
+   604→   604→  const chartData = useMemo(() => {
+   605→   605→    return messes.map((m) => {
+   606→   606→      let booked = 0;
+   607→   607→      let total = 0;
+   608→   608→      for (const r of m.rooms) for (const s of r.seats) {
+   609→   609→        total++;
+   610→   610→        const st = seatOverrides[s.id] ?? s.status;
+   611→   611→        if (st === "BOOKED") booked++;
+   612→   612→      }
+   613→   613→      return {
+   614→   614→        name: m.name.length > 10 ? m.name.slice(0, 10) + "…" : m.name,
+   615→   615→        occupancy: total ? Math.round((booked / total) * 100) : 0,
+   616→   616→      };
+   617→   617→    });
+   618→   618→  }, [messes, seatOverrides]);
+   619→   619→
+   620→   620→  return (
+   621→   621→    <div className="space-y-6">
+   622→   622→      <div>
+   623→   623→        <h2 className="text-xl font-bold">স্বাগতম, {owner.name} 👋</h2>
+   624→   624→        <p className="text-sm text-muted-foreground">আপনার মেস পরিচালনার সারসংক্ষেপ</p>
+   625→   625→      </div>
+   626→   626→
+   627→   627→      {/* KPI cards */}
+   628→   628→      {statsLoading ? (
+   629→   629→        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+   630→   630→          {[1, 2, 3, 4, 5].map((i) => (
+   631→   631→            <Skeleton key={i} className="h-28 rounded-xl" />
+   632→   632→          ))}
+   633→   633→        </div>
+   634→   634→      ) : statsError ? (
+   635→   635→        <Card className="p-6 text-center">
+   636→   636→          <p className="text-sm text-muted-foreground mb-3">ডেটা লোড করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।</p>
+   637→   637→          <Button size="sm" variant="outline" onClick={loadOverview}>
+   638→   638→            <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> আবার চেষ্টা করুন
+   639→   639→          </Button>
+   640→   640→        </Card>
+   641→   641→      ) : (
+   642→   642→        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+   643→   643→          {kpis.map((kpi) => {
+   644→   644→            const Icon = kpi.icon;
+   645→   645→            return (
+   646→   646→              <Card key={kpi.label} className="gap-3 p-4">
+   647→   647→                <div className="flex items-center justify-between">
+   648→   648→                  <div className={cn("flex h-9 w-9 items-center justify-center rounded-lg", kpi.tint)}>
+   649→   649→                    <Icon className="h-5 w-5" />
+   650→   650→                  </div>
+   651→   651→                </div>
+   652→   652→                <div>
+   653→   653→                  <div className="text-2xl font-bold leading-tight">{kpi.value}</div>
+   654→   654→                  <div className="text-xs font-medium text-foreground">{kpi.label}</div>
+   655→   655→                  <div className="text-[11px] text-muted-foreground">{kpi.sub}</div>
+   656→   656→                </div>
+   657→   657→              </Card>
+   658→   658→            );
+   659→   659→          })}
+   660→   660→        </div>
+   661→   661→      )}
+   662→   662→
+   663→   663→      <div className="grid gap-4 lg:grid-cols-2">
+   664→   664→        {/* Occupancy chart */}
+   665→   665→        <Card className="p-4">
+   666→   666→          <CardHeader className="px-0 pt-0">
+   667→   667→            <CardTitle className="text-base">মেস অনুযায়ী অকুপেন্সি</CardTitle>
+   668→   668→            <CardDescription>প্রতিটি মেসের বর্তমান সিট ব্যবহারের হার</CardDescription>
+   669→   669→          </CardHeader>
+   670→   670→          <CardContent className="px-0 pb-0">
+   671→   671→            {loading ? (
+   672→   672→              <Skeleton className="h-56 w-full" />
+   673→   673→            ) : chartData.length === 0 ? (
+   674→   674→              <EmptyState title="কোনো মেস নেই" desc="নতুন মেস যোগ করুন" />
+   675→   675→            ) : (
+   676→   676→              <ResponsiveContainer width="100%" height={220}>
+   677→   677→                <BarChart data={chartData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+   678→   678→                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" vertical={false} />
+   679→   679→                  <XAxis dataKey="name" tick={{ fontSize: 11 }} className="text-muted-foreground" />
+   680→   680→                  <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
+   681→   681→                  <Tooltip
+   682→   682→                    contentStyle={{
+   683→   683→                      borderRadius: 8,
+   684→   684→                      border: "1px solid hsl(var(--border))",
+   685→   685→                      fontSize: 12,
+   686→   686→                    }}
+   687→   687→                    formatter={(v: number) => [`${bn(v)}%`, "অকুপেন্সি"]}
+   688→   688→                  />
+   689→   689→                  <Bar dataKey="occupancy" radius={[6, 6, 0, 0]} fill="#00A885" maxBarSize={48}>
+   690→   690→                    {chartData.map((entry, i) => (
+   691→   691→                      <Cell
+   692→   692→                        key={i}
+   693→   693→                        fill={entry.occupancy >= 80 ? "#ef4444" : entry.occupancy >= 50 ? "#f59e0b" : "#00A885"}
+   694→   694→                      />
+   695→   695→                    ))}
+   696→   696→                  </Bar>
+   697→   697→                </BarChart>
+   698→   698→              </ResponsiveContainer>
+   699→   699→            )}
+   700→   700→          </CardContent>
+   701→   701→        </Card>
+   702→   702→
+   703→   703→        {/* Recent activity */}
+   704→   704→        <Card className="p-4">
+   705→   705→          <CardHeader className="px-0 pt-0">
+   706→   706→            <CardTitle className="text-base">সাম্প্রতিক কার্যক্রম</CardTitle>
+   707→   707→            <CardDescription>নতুন বুকিং রিকোয়েস্ট ও আপডেট</CardDescription>
+   708→   708→          </CardHeader>
+   709→   709→          <CardContent className="px-0 pb-0">
+   710→   710→            {recentRequests.length === 0 ? (
+   711→   711→              <EmptyState title="কোনো নতুন রিকোয়েস্ট নেই" desc="যখন সিকার বুকিং পাঠাবে এখানে দেখা যাবে" />
+   712→   712→            ) : (
+   713→   713→              <ul className="max-h-72 space-y-2 overflow-y-auto pr-1">
+   714→   714→                {recentRequests.slice(0, 6).map((r) => (
+   715→   715→                  <li
+   716→   716→                    key={r.id}
+   717→   717→                    className="flex items-start gap-3 rounded-lg border bg-background p-3"
+   718→   718→                  >
+   719→   719→                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">
+   720→   720→                      {r.seekerName.slice(0, 2)}
+   721→   721→                    </div>
+   722→   722→                    <div className="min-w-0 flex-1">
+   723→   723→                      <div className="flex items-center justify-between gap-2">
+   724→   724→                        <p className="truncate text-sm font-semibold">{r.seekerName}</p>
+   725→   725→                        <span className="text-[11px] text-muted-foreground">{bnDate(r.createdAt)}</span>
+   726→   726→                      </div>
+   727→   727→                      <p className="truncate text-xs text-muted-foreground">
+   728→   728→                        {r.messName} • রুম {bn(r.roomNumber)} • সিট {bn(r.seatNumber)}
+   729→   729→                      </p>
+   730→   730→                      <Badge
+   731→   731→                        variant="secondary"
+   732→   732→                        className={cn(
+   733→   733→                          "mt-1",
+   734→   734→                          r.status === "PENDING" && "bg-amber-100 text-amber-700 hover:bg-amber-100",
+   735→   735→                          r.status === "WAITLISTED" && "bg-violet-100 text-violet-700 hover:bg-violet-100"
+   736→   736→                        )}
+   737→   737→                      >
+   738→   738→                        {r.status === "PENDING" ? "পেন্ডিং" : "ওয়েটলিস্টেড"}
+   739→   739→                      </Badge>
+   740→   740→                    </div>
+   741→   741→                  </li>
+   742→   742→                ))}
+   743→   743→              </ul>
+   744→   744→            )}
+   745→   745→            <Button variant="ghost" size="sm" className="mt-3 w-full" onClick={() => onNavigate("requests")}>
+   746→   746→              সব রিকোয়েস্ট দেখুন <ArrowRight className="h-3.5 w-3.5" />
+   747→   747→            </Button>
+   748→   748→          </CardContent>
+   749→   749→        </Card>
+   750→   750→      </div>
+   751→   751→    </div>
+   752→   752→  );
+   753→   753→}
+   754→   754→
+   755→   755→// ----------------------------------------------------------------------------
+   756→   756→// Messes tab
+   757→   757→// ----------------------------------------------------------------------------
+   758→   758→
+   759→   759→function MessesTab({
+   760→   760→  owner,
+   761→   761→  messes,
+   762→   762→  loading,
+   763→   763→  onRefresh,
+   764→   764→  onSelectMess,
+   765→   765→}: {
+   766→   766→  owner: PublicUser;
+   767→   767→  messes: OwnerMess[];
+   768→   768→  loading: boolean;
+   769→   769→  onRefresh: () => void;
+   770→   770→  onSelectMess: (id: string) => void;
+   771→   771→}) {
+   772→   772→  const [addOpen, setAddOpen] = useState(false);
+   773→   773→
+   774→   774→  return (
+   775→   775→    <div className="space-y-5">
+   776→   776→      <div className="flex flex-wrap items-center justify-between gap-3">
+   777→   777→        <div>
+   778→   778→          <h2 className="text-xl font-bold">আমার মেসসমূহ</h2>
+   779→   779→          <p className="text-sm text-muted-foreground">
+   780→   780→            মোট {bn(messes.length)} টি মেস লিস্টেড • মাল্টি-মেস সাপোর্ট
+   781→   781→          </p>
+   782→   782→        </div>
+   783→   783→        <Button onClick={() => setAddOpen(true)}>
+   784→   784→          <Plus className="h-4 w-4" /> নতুন মেস যোগ করুন
+   785→   785→        </Button>
+   786→   786→      </div>
+   787→   787→
+   788→   788→      {loading ? (
+   789→   789→        <div className="grid gap-4 md:grid-cols-2">
+   790→   790→          {[1, 2].map((i) => (
+   791→   791→            <Skeleton key={i} className="h-44 rounded-xl" />
+   792→   792→          ))}
+   793→   793→        </div>
+   794→   794→      ) : messes.length === 0 ? (
+   795→   795→        <EmptyState
+   796→   796→          title="কোনো মেস যোগ করা হয়নি"
+   797→   797→          desc="নতুন মেস যোগ করতে নিচের বাটনে ক্লিক করুন"
+   798→   798→          action={
+   799→   799→            <Button onClick={() => setAddOpen(true)}>
+   800→   800→              <Plus className="h-4 w-4" /> প্রথম মেস যোগ করুন
+   801→   801→            </Button>
+   802→   802→          }
+   803→   803→        />
+   804→   804→      ) : (
+   805→   805→        <div className="grid gap-4 md:grid-cols-2">
+   806→   806→          {messes.map((m) => (
+   807→   807→            <Card key={m.id} className="overflow-hidden p-0">
+   808→   808→              <div className="flex gap-0">
+   809→   809→                <div className="relative h-32 w-28 shrink-0 bg-muted sm:w-36">
+   810→   810→                  {m.image ? (
+   811→   811→                    <img src={m.image} alt={m.name} className="h-full w-full object-cover" />
+   812→   812→                  ) : (
+   813→   813→                    <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+   814→   814→                      <Building2 className="h-8 w-8" />
+   815→   815→                    </div>
+   816→   816→                  )}
+   817→   817→                </div>
+   818→   818→                <div className="flex flex-1 flex-col gap-2 p-4">
+   819→   819→                  <div className="flex items-start justify-between gap-2">
+   820→   820→                    <div className="min-w-0">
+   821→   821→                      <h3 className="truncate font-bold">{m.name}</h3>
+   822→   822→                      <p className="flex items-center gap-1 text-xs text-muted-foreground">
+   823→   823→                        <MapPin className="h-3 w-3" /> {m.area}
+   824→   824→                      </p>
+   825→   825→                    </div>
+   826→   826→                    {m.verified && <VerifiedBadge />}
+   827→   827→                  </div>
+   828→   828→
+   829→   829→                  <div className="flex flex-wrap items-center gap-2 text-xs">
+   830→   830→                    <Badge variant="secondary" className="bg-primary/10 text-primary">
+   831→   831→                      {MESS_TYPE_LABELS[m.type]}
+   832→   832→                    </Badge>
+   833→   833→                    <Badge variant="outline">{formatTaka(m.rentFrom)}–{formatTaka(m.rentTo)}</Badge>
+   834→   834→                    {!m.published && (
+   835→   835→                      <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">
+   836→   836→                        অপ্রকাশিত
+   837→   837→                      </Badge>
+   838→   838→                    )}
+   839→   839→                  </div>
+   840→   840→
+   841→   841→                  <div className="mt-1 grid grid-cols-3 gap-2 text-center">
+   842→   842→                    <div className="rounded-lg bg-muted/50 p-2">
+   843→   843→                      <div className="text-sm font-bold">{bn(m.totalSeats)}</div>
+   844→   844→                      <div className="text-[10px] text-muted-foreground">মোট সিট</div>
+   845→   845→                    </div>
+   846→   846→                    <div className="rounded-lg bg-emerald-50 p-2 dark:bg-emerald-950/30">
+   847→   847→                      <div className="text-sm font-bold text-emerald-700 dark:text-emerald-300">{bn(m.availableSeats)}</div>
+   848→   848→                      <div className="text-[10px] text-muted-foreground">ফাঁকা</div>
+   849→   849→                    </div>
+   850→   850→                    <div className="rounded-lg bg-rose-50 p-2 dark:bg-rose-950/30">
+   851→   851→                      <div className="text-sm font-bold text-rose-700 dark:text-rose-300">{bn(m.bookedSeats)}</div>
+   852→   852→                      <div className="text-[10px] text-muted-foreground">বুকড</div>
+   853→   853→                    </div>
+   854→   854→                  </div>
+   855→   855→
+   856→   856→                  <div className="mt-1">
+   857→   857→                    <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
+   858→   858→                      <span>অকুপেন্সি</span>
+   859→   859→                      <span className="font-semibold">{bn(m.occupancyRate)}%</span>
+   860→   860→                    </div>
+   861→   861→                    <Progress value={m.occupancyRate} className="h-1.5" />
+   862→   862→                  </div>
+   863→   863→
+   864→   864→                  <Button
+   865→   865→                    size="sm"
+   866→   866→                    variant="outline"
+   867→   867→                    className="mt-1 w-full"
+   868→   868→                    onClick={() => onSelectMess(m.id)}
+   869→   869→                  >
+   870→   870→                    রুম ও সিট ম্যানেজ করুন <ArrowRight className="h-3.5 w-3.5" />
+   871→   871→                  </Button>
+   872→   872→                </div>
+   873→   873→              </div>
+   874→   874→            </Card>
+   875→   875→          ))}
+   876→   876→        </div>
+   877→   877→      )}
+   878→   878→
+   879→   879→      <AddMessDialog
+   880→   880→        open={addOpen}
+   881→   881→        onOpenChange={setAddOpen}
+   882→   882→        owner={owner}
+   883→   883→        onCreated={() => {
+   884→   884→          setAddOpen(false);
+   885→   885→          onRefresh();
+   886→   886→        }}
+   887→   887→      />
+   888→   888→    </div>
+   889→   889→  );
+   890→   890→}
+   891→   891→
+   892→   892→function AddMessDialog({
+   893→   893→  open,
+   894→   894→  onOpenChange,
+   895→   895→  owner,
+   896→   896→  onCreated,
+   897→   897→}: {
+   898→   898→  open: boolean;
+   899→   899→  onOpenChange: (v: boolean) => void;
+   900→   900→  owner: PublicUser;
+   901→   901→  onCreated: () => void;
+   902→   902→}) {
+   903→   903→  const [name, setName] = useState("");
+   904→   904→  const [area, setArea] = useState("");
+   905→   905→  const [address, setAddress] = useState("");
+   906→   906→  const [lat, setLat] = useState("23.7806");
+   907→   907→  const [lng, setLng] = useState("90.4193");
+   908→   908→  const [type, setType] = useState<MessType>("STUDENT_MALE");
+   909→   909→  const [rentFrom, setRentFrom] = useState("4000");
+   910→   910→  const [rentTo, setRentTo] = useState("8000");
+   911→   911→  const [description, setDescription] = useState("");
+   912→   912→  const [facilities, setFacilities] = useState<string[]>(["wifi", "attached_bath"]);
+   913→   913→  const [images, setImages] = useState("");
+   914→   914→  const [submitting, setSubmitting] = useState(false);
+   915→   915→
+   916→   916→  const reset = () => {
+   917→   917→    setName("");
+   918→   918→    setArea("");
+   919→   919→    setAddress("");
+   920→   920→    setLat("23.7806");
+   921→   921→    setLng("90.4193");
+   922→   922→    setType("STUDENT_MALE");
+   923→   923→    setRentFrom("4000");
+   924→   924→    setRentTo("8000");
+   925→   925→    setDescription("");
+   926→   926→    setFacilities(["wifi", "attached_bath"]);
+   927→   927→    setImages("");
+   928→   928→  };
+   929→   929→
+   930→   930→  const submit = async () => {
+   931→   931→    if (!name.trim() || !area.trim() || !address.trim()) {
+   932→   932→      toast.error("নাম, এলাকা ও ঠিকানা আবশ্যক");
+   933→   933→      return;
+   934→   934→    }
+   935→   935→    setSubmitting(true);
+   936→   936→    try {
+   937→   937→      const imgArr = images
+   938→   938→        .split("\n")
+   939→   939→        .map((s) => s.trim())
+   940→   940→        .filter(Boolean);
+   941→   941→      const res = await fetch("/api/owner/messes", {
+   942→   942→        method: "POST",
+   943→   943→        headers: { "Content-Type": "application/json" },
+   944→   944→        body: JSON.stringify({
+   945→   945→          ownerId: owner.id,
+   946→   946→          name: name.trim(),
+   947→   947→          area: area.trim(),
+   948→   948→          address: address.trim(),
+   949→   949→          lat: Number(lat),
+   950→   950→          lng: Number(lng),
+   951→   951→          type,
+   952→   952→          rentFrom: Number(rentFrom),
+   953→   953→          rentTo: Number(rentTo),
+   954→   954→          description: description.trim(),
+   955→   955→          facilities,
+   956→   956→          images: imgArr,
+   957→   957→        }),
+   958→   958→      });
+   959→   959→      if (!res.ok) throw new Error("Failed");
+   960→   960→      toast.success("নতুন মেস যোগ হয়েছে! এডমিন অনুমোদনের পর প্রকাশিত হবে।");
+   961→   961→      reset();
+   962→   962→      onCreated();
+   963→   963→    } catch {
+   964→   964→      toast.error("মেস যোগ করতে সমস্যা হয়েছে");
+   965→   965→    } finally {
+   966→   966→      setSubmitting(false);
+   967→   967→    }
+   968→   968→  };
+   969→   969→
+   970→   970→  return (
+   971→   971→    <Dialog open={open} onOpenChange={onOpenChange}>
+   972→   972→      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+   973→   973→        <DialogHeader>
+   974→   974→          <DialogTitle>নতুন মেস যোগ করুন</DialogTitle>
+   975→   975→          <DialogDescription>মেসের বিস্তারিত তথ্য পূরণ করুন</DialogDescription>
+   976→   976→        </DialogHeader>
+   977→   977→
+   978→   978→        <div className="space-y-3">
+   979→   979→          <div className="space-y-1.5">
+   980→   980→            <Label>মেসের নাম *</Label>
+   981→   981→            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="যেমন: আল-মদিনা মেস" />
+   982→   982→          </div>
+   983→   983→          <div className="grid grid-cols-2 gap-3">
+   984→   984→            <div className="space-y-1.5">
+   985→   985→              <Label>এলাকা *</Label>
+   986→   986→              <Input value={area} onChange={(e) => setArea(e.target.value)} placeholder="মিরপুর" />
+   987→   987→            </div>
+   988→   988→            <div className="space-y-1.5">
+   989→   989→              <Label>ধরন</Label>
+   990→   990→              <Select value={type} onValueChange={(v) => setType(v as MessType)}>
+   991→   991→                <SelectTrigger className="w-full">
+   992→   992→                  <SelectValue />
+   993→   993→                </SelectTrigger>
+   994→   994→                <SelectContent>
+   995→   995→                  <SelectItem value="STUDENT_MALE">ছাত্র</SelectItem>
+   996→   996→                  <SelectItem value="STUDENT_FEMALE">ছাত্রী</SelectItem>
+   997→   997→                  <SelectItem value="FAMILY">ফ্যামিলি</SelectItem>
+   998→   998→                </SelectContent>
+   999→   999→              </Select>
+  1000→  1000→            </div>
+  1001→  1001→          </div>
+  1002→  1002→          <div className="space-y-1.5">
+  1003→  1003→            <Label>সম্পূর্ণ ঠিকানা *</Label>
+  1004→  1004→            <Textarea value={address} onChange={(e) => setAddress(e.target.value)} placeholder="বাসা/হোল্ডিং নং, রোড, থানা" className="min-h-12" />
+  1005→  1005→          </div>
+  1006→  1006→          <div className="grid grid-cols-2 gap-3">
+  1007→  1007→            <div className="space-y-1.5">
+  1008→  1008→              <Label>latitude</Label>
+  1009→  1009→              <Input value={lat} onChange={(e) => setLat(e.target.value)} />
+  1010→  1010→            </div>
+  1011→  1011→            <div className="space-y-1.5">
+  1012→  1012→              <Label>longitude</Label>
+  1013→  1013→              <Input value={lng} onChange={(e) => setLng(e.target.value)} />
+  1014→  1014→            </div>
+  1015→  1015→          </div>
+  1016→  1016→          <div className="grid grid-cols-2 gap-3">
+  1017→  1017→            <div className="space-y-1.5">
+  1018→  1018→              <Label>ভাড়া (নিম্ন) ৳</Label>
+  1019→  1019→              <Input type="number" value={rentFrom} onChange={(e) => setRentFrom(e.target.value)} />
+  1020→  1020→            </div>
+  1021→  1021→            <div className="space-y-1.5">
+  1022→  1022→              <Label>ভাড়া (উচ্চ) ৳</Label>
+  1023→  1023→              <Input type="number" value={rentTo} onChange={(e) => setRentTo(e.target.value)} />
+  1024→  1024→            </div>
+  1025→  1025→          </div>
+  1026→  1026→          <div className="space-y-1.5">
+  1027→  1027→            <Label>বিবরণ</Label>
+  1028→  1028→            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="মেসের বিবরণ, নিয়ম, আশেপাশের সুবিধা" />
+  1029→  1029→          </div>
+  1030→  1030→          <div className="space-y-1.5">
+  1031→  1031→            <Label>ফ্যাসিলিটি</Label>
+  1032→  1032→            <div className="grid grid-cols-2 gap-2 rounded-lg border p-3">
+  1033→  1033→              {FACILITIES.map((f) => {
+  1034→  1034→                const checked = facilities.includes(f.key);
+  1035→  1035→                return (
+  1036→  1036→                  <Label
+  1037→  1037→                    key={f.key}
+  1038→  1038→                    className={cn(
+  1039→  1039→                      "flex cursor-pointer items-center gap-2 rounded-md p-1.5 text-xs",
+  1040→  1040→                      checked && "bg-primary/5"
+  1041→  1041→                    )}
+  1042→  1042→                  >
+  1043→  1043→                    <Checkbox
+  1044→  1044→                      checked={checked}
+  1045→  1045→                      onCheckedChange={(v) => {
+  1046→  1046→                        if (v) setFacilities([...facilities, f.key]);
+  1047→  1047→                        else setFacilities(facilities.filter((k) => k !== f.key));
+  1048→  1048→                      }}
+  1049→  1049→                    />
+  1050→  1050→                    <FacilityIcon iconKey={f.icon} className="h-3.5 w-3.5 text-primary" />
+  1051→  1051→                    {f.label}
+  1052→  1052→                  </Label>
+  1053→  1053→                );
+  1054→  1054→              })}
+  1055→  1055→            </div>
+  1056→  1056→          </div>
+  1057→  1057→          <div className="space-y-1.5">
+  1058→  1058→            <Label>ছবির URL (প্রতি লাইনে একটি)</Label>
+  1059→  1059→            <Textarea
+  1060→  1060→              value={images}
+  1061→  1061→              onChange={(e) => setImages(e.target.value)}
+  1062→  1062→              placeholder="https://example.com/mess1.jpg"
+  1063→  1063→              className="min-h-16 font-mono text-xs"
+  1064→  1064→            />
+  1065→  1065→          </div>
+  1066→  1066→        </div>
+  1067→  1067→
+  1068→  1068→        <DialogFooter>
+  1069→  1069→          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+  1070→  1070→            বাতিল
+  1071→  1071→          </Button>
+  1072→  1072→          <Button onClick={submit} disabled={submitting}>
+  1073→  1073→            {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+  1074→  1074→            মেস যোগ করুন
+  1075→  1075→          </Button>
+  1076→  1076→        </DialogFooter>
+  1077→  1077→      </DialogContent>
+  1078→  1078→    </Dialog>
+  1079→  1079→  );
+  1080→  1080→}
+  1081→  1081→
+  1082→  1082→// ----------------------------------------------------------------------------
+  1083→  1083→// Rooms tab
+  1084→  1084→// ----------------------------------------------------------------------------
+  1085→  1085→
+  1086→  1086→const SEAT_CYCLE: SeatStatus[] = ["AVAILABLE", "BOOKED", "MAINTENANCE"];
+  1087→  1087→
+  1088→  1088→function RoomsTab({
+  1089→  1089→  messes,
+  1090→  1090→  loading,
+  1091→  1091→  selectedMess,
+  1092→  1092→  onSelectMess,
+  1093→  1093→  seatOverrides,
+  1094→  1094→  setSeatOverrides,
+  1095→  1095→}: {
+  1096→  1096→  messes: OwnerMess[];
+  1097→  1097→  loading: boolean;
+  1098→  1098→  selectedMess: OwnerMess | null;
+  1099→  1099→  onSelectMess: (id: string) => void;
+  1100→  1100→  seatOverrides: Record<string, SeatStatus>;
+  1101→  1101→  setSeatOverrides: React.Dispatch<React.SetStateAction<Record<string, SeatStatus>>>;
+  1102→  1102→}) {
+  1103→  1103→  if (loading) {
+  1104→  1104→    return (
+  1105→  1105→      <div className="space-y-4">
+  1106→  1106→        <Skeleton className="h-10 w-48" />
+  1107→  1107→        <Skeleton className="h-64 rounded-xl" />
+  1108→  1108→      </div>
+  1109→  1109→    );
+  1110→  1110→  }
+  1111→  1111→
+  1112→  1112→  if (messes.length === 0) {
+  1113→  1113→    return <EmptyState title="কোনো মেস নেই" desc="প্রথমে মেস ট্যাব থেকে একটি মেস যোগ করুন" />;
+  1114→  1114→  }
+  1115→  1115→
+  1116→  1116→  if (!selectedMess) {
+  1117→  1117→    return <EmptyState title="মেস নির্বাচন করুন" desc="রুম দেখতে একটি মেস বাছুন" />;
+  1118→  1118→  }
+  1119→  1119→
+  1120→  1120→  const totalSeats = selectedMess.rooms.reduce((s, r) => s + r.seats.length, 0);
+  1121→  1121→
+  1122→  1122→  return (
+  1123→  1123→    <div className="space-y-5">
+  1124→  1124→      <div className="flex flex-wrap items-center justify-between gap-3">
+  1125→  1125→        <div>
+  1126→  1126→          <h2 className="text-xl font-bold">রুম ও সিট ম্যানেজমেন্ট</h2>
+  1127→  1127→          <p className="text-sm text-muted-foreground">
+  1128→  1128→            {bn(selectedMess.rooms.length)} টি রুম • {bn(totalSeats)} টি সিট • সিটে ক্লিক করে স্ট্যাটাস পরিবর্তন করুন
+  1129→  1129→          </p>
+  1130→  1130→        </div>
+  1131→  1131→        <Select value={selectedMess.id} onValueChange={onSelectMess}>
+  1132→  1132→          <SelectTrigger className="w-[220px]">
+  1133→  1133→            <Building2 className="h-4 w-4" />
+  1134→  1134→            <SelectValue />
+  1135→  1135→          </SelectTrigger>
+  1136→  1136→          <SelectContent>
+  1137→  1137→            {messes.map((m) => (
+  1138→  1138→              <SelectItem key={m.id} value={m.id}>
+  1139→  1139→                {m.name}
+  1140→  1140→              </SelectItem>
+  1141→  1141→            ))}
+  1142→  1142→          </SelectContent>
+  1143→  1143→        </Select>
+  1144→  1144→      </div>
+  1145→  1145→
+  1146→  1146→      <Card className="p-4">
+  1147→  1147→        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+  1148→  1148→          <SeatLegend />
+  1149→  1149→          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+  1150→  1150→            <span className="inline-flex items-center gap-1">
+  1151→  1151→              <span className="h-2 w-2 rounded-full bg-emerald-500" /> {bn(selectedMess.availableSeats)} ফাঁকা
+  1152→  1152→            </span>
+  1153→  1153→            <span className="inline-flex items-center gap-1">
+  1154→  1154→              <span className="h-2 w-2 rounded-full bg-red-500" /> {bn(selectedMess.bookedSeats)} বুকড
+  1155→  1155→            </span>
+  1156→  1156→          </div>
+  1157→  1157→        </div>
+  1158→  1158→
+  1159→  1159→        <div className="grid gap-4 sm:grid-cols-2">
+  1160→  1160→          {selectedMess.rooms.map((room) => {
+  1161→  1161→            const available = room.seats.filter((s) => (seatOverrides[s.id] ?? s.status) === "AVAILABLE").length;
+  1162→  1162→            return (
+  1163→  1163→              <div key={room.id} className="rounded-xl border bg-background p-4">
+  1164→  1164→                <div className="mb-3 flex items-center justify-between">
+  1165→  1165→                  <div className="flex items-center gap-2">
+  1166→  1166→                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+  1167→  1167→                      <DoorOpen className="h-4 w-4" />
+  1168→  1168→                    </div>
+  1169→  1169→                    <div>
+  1170→  1170→                      <h4 className="text-sm font-bold">রুম {bn(room.number)}</h4>
+  1171→  1171→                      <p className="text-[11px] text-muted-foreground">
+  1172→  1172→                        {bn(room.seats.length)} সিট • {bn(available)} ফাঁকা
+  1173→  1173→                      </p>
+  1174→  1174→                    </div>
+  1175→  1175→                  </div>
+  1176→  1176→                  <Badge variant="outline" className="text-[10px]">
+  1177→  1177→                    অকুপেন্সি {bn(room.seats.length ? Math.round(((room.seats.length - available) / room.seats.length) * 100) : 0)}%
+  1178→  1178→                  </Badge>
+  1179→  1179→                </div>
+  1180→  1180→                <div className="flex flex-wrap gap-2">
+  1181→  1181→                  {room.seats.map((seat) => {
+  1182→  1182→                    const status = seatOverrides[seat.id] ?? seat.status;
+  1183→  1183→                    return (
+  1184→  1184→                      <SeatBox
+  1185→  1185→                        key={seat.id}
+  1186→  1186→                        status={status}
+  1187→  1187→                        number={seat.number}
+  1188→  1188→                        rent={seat.rent}
+  1189→  1189→                        size="md"
+  1190→  1190→                        onClick={() => {
+  1191→  1191→                          // cycle: AVAILABLE -> BOOKED -> MAINTENANCE -> AVAILABLE
+  1192→  1192→                          const idx = SEAT_CYCLE.indexOf(status);
+  1193→  1193→                          const next = SEAT_CYCLE[(idx + 1) % SEAT_CYCLE.length];
+  1194→  1194→                          if (status === "PENDING") {
+  1195→  1195→                            // can't override pending via this UI; reset to available
+  1196→  1196→                            setSeatOverrides({ ...seatOverrides, [seat.id]: "AVAILABLE" });
+  1197→  1197→                            toast.info(`সিট ${seat.number} ফাঁকা করা হলো`);
+  1198→  1198→                            return;
+  1199→  1199→                          }
+  1200→  1200→                          setSeatOverrides({ ...seatOverrides, [seat.id]: next });
+  1201→  1201→                          toast.success(
+  1202→  1202→                            `সিট ${seat.number} → ${STATUS_CONFIG[next].label}`,
+  1203→  1203→                            { duration: 1800 }
+  1204→  1204→                          );
+  1205→  1205→                        }}
+  1206→  1206→                      />
+  1207→  1207→                    );
+  1208→  1208→                  })}
+  1209→  1209→                </div>
+  1210→  1210→              </div>
+  1211→  1211→            );
+  1212→  1212→          })}
+  1213→  1213→        </div>
+  1214→  1214→
+  1215→  1215→        <div className="mt-4 rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
+  1216→  1216→          💡 <strong>টিপ:</strong> সিটে ক্লিক করলে স্ট্যাটাস পরিবর্তন হবে —{" "}
+  1217→  1217→          <span className="font-medium text-emerald-700">ফাঁকা → বুকড → মেইনটেন্যান্স → ফাঁকা</span>।
+  1218→  1218→          পরিবর্তনগুলো এই সেশনে সংরক্ষিত থাকবে।
+  1219→  1219→        </div>
+  1220→  1220→      </Card>
+  1221→  1221→    </div>
+  1222→  1222→  );
+  1223→  1223→}
+  1224→  1224→
+  1225→  1225→// ----------------------------------------------------------------------------
+  1226→  1226→// Requests tab
+  1227→  1227→// ----------------------------------------------------------------------------
+  1228→  1228→
+  1229→  1229→function RequestsTab({
+  1230→  1230→  owner,
+  1231→  1231→  onNavigate,
+  1232→  1232→}: {
+  1233→  1233→  owner: PublicUser;
+  1234→  1234→  onNavigate: (t: OwnerTab) => void;
+  1235→  1235→}) {
+  1236→  1236→  const [requests, setRequests] = useState<OwnerRequest[]>([]);
+  1237→  1237→  const [loading, setLoading] = useState(true);
+  1238→  1238→  const [filter, setFilter] = useState<"ALL" | "PENDING" | "WAITLISTED">("ALL");
+  1239→  1239→  const [actingId, setActingId] = useState<string | null>(null);
+  1240→  1240→
+  1241→  1241→  const fetchReq = useCallback(async () => {
+  1242→  1242→    setLoading(true);
+  1243→  1243→    try {
+  1244→  1244→      const res = await fetch(`/api/owner/requests?ownerId=${owner.id}`);
+  1245→  1245→      const data = await res.json();
+  1246→  1246→      setRequests(data.requests ?? []);
+  1247→  1247→    } catch {
+  1248→  1248→      setRequests([]);
+  1249→  1249→    } finally {
+  1250→  1250→      setLoading(false);
+  1251→  1251→    }
+  1252→  1252→  }, [owner.id]);
+  1253→  1253→
+  1254→  1254→  useEffect(() => {
+  1255→  1255→    fetchReq();
+  1256→  1256→  }, [fetchReq]);
+  1257→  1257→
+  1258→  1258→  const act = async (id: string, action: "approve" | "reject" | "waitlist", reason?: string) => {
+  1259→  1259→    setActingId(id);
+  1260→  1260→    try {
+  1261→  1261→      const res = await fetch(`/api/bookings/${id}`, {
+  1262→  1262→        method: "PATCH",
+  1263→  1263→        headers: { "Content-Type": "application/json" },
+  1264→  1264→        body: JSON.stringify({ action, reason }),
+  1265→  1265→      });
+  1266→  1266→      if (!res.ok) throw new Error();
+  1267→  1267→      const labels = {
+  1268→  1268→        approve: "বুকিং অনুমোদিত হয়েছে ✓",
+  1269→  1269→        reject: "বুকিং বাতিল করা হয়েছে",
+  1270→  1270→        waitlist: "ওয়েটলিস্টে যুক্ত করা হয়েছে",
+  1271→  1271→      };
+  1272→  1272→      toast.success(labels[action]);
+  1273→  1273→      await fetchReq();
+  1274→  1274→    } catch {
+  1275→  1275→      toast.error("অ্যাকশন সম্পন্ন করা যায়নি");
+  1276→  1276→    } finally {
+  1277→  1277→      setActingId(null);
+  1278→  1278→    }
+  1279→  1279→  };
+  1280→  1280→
+  1281→  1281→  const filtered = filter === "ALL" ? requests : requests.filter((r) => r.status === filter);
+  1282→  1282→
+  1283→  1283→  return (
+  1284→  1284→    <div className="space-y-5">
+  1285→  1285→      <div className="flex flex-wrap items-center justify-between gap-3">
+  1286→  1286→        <div>
+  1287→  1287→          <h2 className="text-xl font-bold">বুকিং রিকোয়েস্ট ইনবক্স</h2>
+  1288→  1288→          <p className="text-sm text-muted-foreground">সিকারদের আগত রিকোয়েস্ট ও সিদ্ধান্ত দিন</p>
+  1289→  1289→        </div>
+  1290→  1290→        <div className="flex gap-1 rounded-lg border bg-background p-1">
+  1291→  1291→          {(["ALL", "PENDING", "WAITLISTED"] as const).map((f) => (
+  1292→  1292→            <button
+  1293→  1293→              key={f}
+  1294→  1294→              onClick={() => setFilter(f)}
+  1295→  1295→              className={cn(
+  1296→  1296→                "rounded-md px-3 py-1 text-xs font-medium transition-colors",
+  1297→  1297→                filter === f ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"
+  1298→  1298→              )}
+  1299→  1299→            >
+  1300→  1300→              {f === "ALL" ? "সব" : f === "PENDING" ? "পেন্ডিং" : "ওয়েটলিস্ট"}
+  1301→  1301→            </button>
+  1302→  1302→          ))}
+  1303→  1303→        </div>
+  1304→  1304→      </div>
+  1305→  1305→
+  1306→  1306→      {loading ? (
+  1307→  1307→        <div className="space-y-3">
+  1308→  1308→          {[1, 2, 3].map((i) => (
+  1309→  1309→            <Skeleton key={i} className="h-32 rounded-xl" />
+  1310→  1310→          ))}
+  1311→  1311→        </div>
+  1312→  1312→      ) : filtered.length === 0 ? (
+  1313→  1313→        <EmptyState
+  1314→  1314→          title="কোনো রিকোয়েস্ট নেই"
+  1315→  1315→          desc={filter === "ALL" ? "নতুন রিকোয়েস্ট এলে এখানে দেখা যাবে" : "এই ফিল্টারে কোনো রিকোয়েস্ট নেই"}
+  1316→  1316→          action={
+  1317→  1317→            <Button variant="outline" onClick={() => onNavigate("overview")}>
+  1318→  1318→              ওভারভিউতে ফিরুন
+  1319→  1319→            </Button>
+  1320→  1320→          }
+  1321→  1321→        />
+  1322→  1322→      ) : (
+  1323→  1323→        <div className="space-y-3">
+  1324→  1324→          {filtered.map((r) => (
+  1325→  1325→            <Card key={r.id} className="gap-3 p-4">
+  1326→  1326→              <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+  1327→  1327→                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-bold">
+  1328→  1328→                  {r.seekerName.slice(0, 2)}
+  1329→  1329→                </div>
+  1330→  1330→                <div className="min-w-0 flex-1">
+  1331→  1331→                  <div className="flex flex-wrap items-center gap-2">
+  1332→  1332→                    <h3 className="font-bold">{r.seekerName}</h3>
+  1333→  1333→                    <Badge
+  1334→  1334→                      className={cn(
+  1335→  1335→                        r.status === "PENDING" && "bg-amber-100 text-amber-700 hover:bg-amber-100",
+  1336→  1336→                        r.status === "WAITLISTED" && "bg-violet-100 text-violet-700 hover:bg-violet-100"
+  1337→  1337→                      )}
+  1338→  1338→                    >
+  1339→  1339→                      {r.status === "PENDING" ? (
+  1340→  1340→                        <><Clock className="h-3 w-3" /> পেন্ডিং</>
+  1341→  1341→                      ) : (
+  1342→  1342→                        <><Clock className="h-3 w-3" /> ওয়েটলিস্টেড</>
+  1343→  1343→                      )}
+  1344→  1344→                    </Badge>
+  1345→  1345→                  </div>
+  1346→  1346→                  <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+  1347→  1347→                    <span className="inline-flex items-center gap-1">
+  1348→  1348→                      <Phone className="h-3 w-3" /> {r.seekerPhone}
+  1349→  1349→                    </span>
+  1350→  1350→                    <span className="inline-flex items-center gap-1">
+  1351→  1351→                      <Building2 className="h-3 w-3" /> {r.messName}
+  1352→  1352→                    </span>
+  1353→  1353→                    <span>রুম {bn(r.roomNumber)} • সিট {bn(r.seatNumber)}</span>
+  1354→  1354→                    <span className="font-medium text-foreground">ভাড়া {formatTaka(r.rent)}/মাস</span>
+  1355→  1355→                  </div>
+  1356→  1356→
+  1357→  1357→                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
+  1358→  1358→                    <div className="rounded-md bg-muted/50 px-2.5 py-1.5">
+  1359→  1359→                      <div className="text-[10px] text-muted-foreground">রেফারেন্স</div>
+  1360→  1360→                      <div className="font-mono font-semibold">{r.reference}</div>
+  1361→  1361→                    </div>
+  1362→  1362→                    <div className="rounded-md bg-muted/50 px-2.5 py-1.5">
+  1363→  1363→                      <div className="text-[10px] text-muted-foreground">ইন-তারিখ</div>
+  1364→  1364→                      <div className="font-semibold">{bnDate(r.moveInDate)}</div>
+  1365→  1365→                    </div>
+  1366→  1366→                    <div className="rounded-md bg-muted/50 px-2.5 py-1.5">
+  1367→  1367→                      <div className="text-[10px] text-muted-foreground">সময়কাল</div>
+  1368→  1368→                      <div className="font-semibold">{r.duration}</div>
+  1369→  1369→                    </div>
+  1370→  1370→                  </div>
+  1371→  1371→
+  1372→  1372→                  {r.message && (
+  1373→  1373→                    <div className="mt-2 rounded-md border-l-2 border-primary bg-primary/5 px-3 py-2 text-xs italic">
+  1374→  1374→                      “{r.message}”
+  1375→  1375→                    </div>
+  1376→  1376→                  )}
+  1377→  1377→
+  1378→  1378→                  <div className="mt-3 flex flex-wrap gap-2">
+  1379→  1379→                    <Button
+  1380→  1380→                      size="sm"
+  1381→  1381→                      onClick={() => act(r.id, "approve")}
+  1382→  1382→                      disabled={actingId === r.id}
+  1383→  1383→                      className="bg-emerald-600 hover:bg-emerald-700"
+  1384→  1384→                    >
+  1385→  1385→                      {actingId === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+  1386→  1386→                      অনুমোদন
+  1387→  1387→                    </Button>
+  1388→  1388→                    <Button
+  1389→  1389→                      size="sm"
+  1390→  1390→                      variant="outline"
+  1391→  1391→                      onClick={() => act(r.id, "waitlist")}
+  1392→  1392→                      disabled={actingId === r.id}
+  1393→  1393→                    >
+  1394→  1394→                      <Clock className="h-3.5 w-3.5" /> ওয়েটলিস্ট
+  1395→  1395→                    </Button>
+  1396→  1396→                    <Button
+  1397→  1397→                      size="sm"
+  1398→  1398→                      variant="destructive"
+  1399→  1399→                      onClick={() => act(r.id, "reject", "মালিক কর্তৃক প্রত্যাখ্যাত")}
+  1400→  1400→                      disabled={actingId === r.id}
+  1401→  1401→                    >
+  1402→  1402→                      <XCircle className="h-3.5 w-3.5" /> বাতিল
+  1403→  1403→                    </Button>
+  1404→  1404→                  </div>
+  1405→  1405→                </div>
+  1406→  1406→              </div>
+  1407→  1407→            </Card>
+  1408→  1408→          ))}
+  1409→  1409→        </div>
+  1410→  1410→      )}
+  1411→  1411→    </div>
+  1412→  1412→  );
+  1413→  1413→}
+  1414→  1414→
+  1415→  1415→// ----------------------------------------------------------------------------
+  1416→  1416→// Tenants tab
+  1417→  1417→// ----------------------------------------------------------------------------
+  1418→  1418→
+  1419→  1419→function TenantsTab({ messes, loading }: { messes: OwnerMess[]; loading: boolean }) {
+  1420→  1420→  const [tenants, setTenants] = useState<BookingWithRelations[]>([]);
+  1421→  1421→  const [fetching, setFetching] = useState(true);
+  1422→  1422→  const [checkedOut, setCheckedOut] = useState<Record<string, boolean>>({});
+  1423→  1423→
+  1424→  1424→  useEffect(() => {
+  1425→  1425→    if (loading || messes.length === 0) return;
+  1426→  1426→    let cancelled = false;
+  1427→  1427→    Promise.all(
+  1428→  1428→      messes.map((m) =>
+  1429→  1429→        fetch(`/api/bookings?messId=${m.id}&status=CONFIRMED`)
+  1430→  1430→          .then((r) => r.json())
+  1431→  1431→          .then((d) => (d.bookings ?? []) as BookingWithRelations[])
+  1432→  1432→          .catch(() => [] as BookingWithRelations[])
+  1433→  1433→      )
+  1434→  1434→    )
+  1435→  1435→      .then((arrs) => {
+  1436→  1436→        if (cancelled) return;
+  1437→  1437→        setTenants(arrs.flat());
+  1438→  1438→      })
+  1439→  1439→      .finally(() => {
+  1440→  1440→        if (!cancelled) setFetching(false);
+  1441→  1441→      });
+  1442→  1442→    return () => {
+  1443→  1443→      cancelled = true;
+  1444→  1444→    };
+  1445→  1445→  }, [messes, loading]);
+  1446→  1446→
+  1447→  1447→  if (loading || (fetching && messes.length > 0)) {
+  1448→  1448→    return (
+  1449→  1449→      <div className="space-y-4">
+  1450→  1450→        <Skeleton className="h-10 w-48" />
+  1451→  1451→        <Skeleton className="h-72 rounded-xl" />
+  1452→  1452→      </div>
+  1453→  1453→    );
+  1454→  1454→  }
+  1455→  1455→
+  1456→  1456→  return (
+  1457→  1457→    <div className="space-y-5">
+  1458→  1458→      <div>
+  1459→  1459→        <h2 className="text-xl font-bold">বর্তমান টেন্যান্ট</h2>
+  1460→  1460→        <p className="text-sm text-muted-foreground">
+  1461→  1461→          মোট {bn(tenants.length)} জন সক্রিয় টেন্যান্ট • কনফার্মড বুকিং
+  1462→  1462→        </p>
+  1463→  1463→      </div>
+  1464→  1464→
+  1465→  1465→      {tenants.length === 0 ? (
+  1466→  1466→        <EmptyState
+  1467→  1467→          title="কোনো টেন্যান্ট নেই"
+  1468→  1468→          desc="বুকিং রিকোয়েস্ট অনুমোদন করলে টেন্যান্ট এখানে দেখা যাবে"
+  1469→  1469→        />
+  1470→  1470→      ) : (
+  1471→  1471→        <Card className="p-0">
+  1472→  1472→          <Table>
+  1473→  1473→            <TableHeader>
+  1474→  1474→              <TableRow>
+  1475→  1475→                <TableHead>টেন্যান্ট</TableHead>
+  1476→  1476→                <TableHead>মেস / সিট</TableHead>
+  1477→  1477→                <TableHead className="hidden md:table-cell">ইন-তারিখ</TableHead>
+  1478→  1478→                <TableHead>পরবর্তী পেমেন্ট</TableHead>
+  1479→  1479→                <TableHead className="text-right">অ্যাকশন</TableHead>
+  1480→  1480→              </TableRow>
+  1481→  1481→            </TableHeader>
+  1482→  1482→            <TableBody>
+  1483→  1483→              {tenants.map((t) => {
+  1484→  1484→                const isOut = checkedOut[t.id];
+  1485→  1485→                const nextPay = addMonths(t.moveInDate, 1);
+  1486→  1486→                return (
+  1487→  1487→                  <TableRow key={t.id} className={isOut ? "opacity-50" : ""}>
+  1488→  1488→                    <TableCell>
+  1489→  1489→                      <div className="flex items-center gap-2">
+  1490→  1490→                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">
+  1491→  1491→                          {t.seekerName.slice(0, 2)}
+  1492→  1492→                        </div>
+  1493→  1493→                        <div>
+  1494→  1494→                          <div className="text-sm font-semibold">{t.seekerName}</div>
+  1495→  1495→                          <div className="text-[11px] text-muted-foreground">{t.seekerPhone}</div>
+  1496→  1496→                        </div>
+  1497→  1497→                      </div>
+  1498→  1498→                    </TableCell>
+  1499→  1499→                    <TableCell>
+  1500→  1500→                      <div className="text-xs">
+  1501→  1501→                        <div className="font-medium">{t.messName}</div>
+  1502→  1502→                        <div className="text-muted-foreground">
+  1503→  1503→                          রুম {bn(t.roomNumber)} • সিট {bn(t.seatNumber)} • {formatTaka(t.rent)}
+  1504→  1504→                        </div>
+  1505→  1505→                      </div>
+  1506→  1506→                    </TableCell>
+  1507→  1507→                    <TableCell className="hidden text-xs md:table-cell">{bnDate(t.moveInDate)}</TableCell>
+  1508→  1508→                    <TableCell className="text-xs">
+  1509→  1509→                      <div className="font-medium text-amber-700 dark:text-amber-400">{bnDate(nextPay)}</div>
+  1510→  1510→                      <div className="text-[10px] text-muted-foreground">{formatTaka(t.rent)}</div>
+  1511→  1511→                    </TableCell>
+  1512→  1512→                    <TableCell className="text-right">
+  1513→  1513→                      {isOut ? (
+  1514→  1514→                        <Badge variant="secondary" className="bg-muted">চেকআউট সম্পন্ন</Badge>
+  1515→  1515→                      ) : (
+  1516→  1516→                        <Button
+  1517→  1517→                          size="sm"
+  1518→  1518→                          variant="outline"
+  1519→  1519→                          onClick={() => {
+  1520→  1520→                            setCheckedOut({ ...checkedOut, [t.id]: true });
+  1521→  1521→                            toast.success(`${t.seekerName} চেকআউট মার্ক করা হয়েছে`);
+  1522→  1522→                          }}
+  1523→  1523→                        >
+  1524→  1524→                          <XCircle className="h-3.5 w-3.5" /> চেকআউট
+  1525→  1525→                        </Button>
+  1526→  1526→                      )}
+  1527→  1527→                    </TableCell>
+  1528→  1528→                  </TableRow>
+  1529→  1529→                );
+  1530→  1530→              })}
+  1531→  1531→            </TableBody>
+  1532→  1532→          </Table>
+  1533→  1533→        </Card>
+  1534→  1534→      )}
+  1535→  1535→    </div>
+  1536→  1536→  );
+  1537→  1537→}
+  1538→  1538→
+  1539→  1539→// ----------------------------------------------------------------------------
+  1540→  1540→// Income tab
+  1541→  1541→// ----------------------------------------------------------------------------
+  1542→  1542→
+  1543→  1543→function IncomeTab({
+  1544→  1544→  owner,
+  1545→  1545→  messes,
+  1546→  1546→  loading,
+  1547→  1547→  seatOverrides,
+  1548→  1548→}: {
+  1549→  1549→  owner: PublicUser;
+  1550→  1550→  messes: OwnerMess[];
+  1551→  1551→  loading: boolean;
+  1552→  1552→  seatOverrides: Record<string, SeatStatus>;
+  1553→  1553→}) {
+  1554→  1554→  const [stats, setStats] = useState<OwnerStats | null>(null);
+  1555→  1555→  const [statsLoading, setStatsLoading] = useState(true);
+  1556→  1556→
+  1557→  1557→  useEffect(() => {
+  1558→  1558→    let cancelled = false;
+  1559→  1559→    fetch(`/api/owner/stats?ownerId=${owner.id}`)
+  1560→  1560→      .then((r) => r.json())
+  1561→  1561→      .then((d) => {
+  1562→  1562→        if (!cancelled) setStats(d.stats ?? null);
+  1563→  1563→      })
+  1564→  1564→      .catch(() => {
+  1565→  1565→        if (!cancelled) setStats(null);
+  1566→  1566→      })
+  1567→  1567→      .finally(() => {
+  1568→  1568→        if (!cancelled) setStatsLoading(false);
+  1569→  1569→      });
+  1570→  1570→    return () => {
+  1571→  1571→      cancelled = true;
+  1572→  1572→    };
+  1573→  1573→  }, [owner.id]);
+  1574→  1574→
+  1575→  1575→  // Effective income with overrides
+  1576→  1576→  const effectiveIncome = useMemo(() => {
+  1577→  1577→    let income = 0;
+  1578→  1578→    for (const m of messes) {
+  1579→  1579→      for (const r of m.rooms) {
+  1580→  1580→        for (const s of r.seats) {
+  1581→  1581→          if ((seatOverrides[s.id] ?? s.status) === "BOOKED") income += s.rent;
+  1582→  1582→        }
+  1583→  1583→      }
+  1584→  1584→    }
+  1585→  1585→    return income;
+  1586→  1586→  }, [messes, seatOverrides]);
+  1587→  1587→
+  1588→  1588→  const baseIncome = stats?.monthlyIncome ?? effectiveIncome;
+  1589→  1589→
+  1590→  1590→  // 6-month deterministic trend
+  1591→  1591→  const chartData = useMemo(() => {
+  1592→  1592→    const factors = [0.78, 0.82, 0.88, 0.93, 0.97, 1];
+  1593→  1593→    return BN_SHORT_MONTHS.map((m, i) => ({
+  1594→  1594→      month: m,
+  1595→  1595→      income: Math.round(baseIncome * factors[i]),
+  1596→  1596→      seats: Math.round((stats?.bookedSeats ?? 0) * factors[i]),
+  1597→  1597→    }));
+  1598→  1598→  }, [baseIncome, stats]);
+  1599→  1599→
+  1600→  1600→  const yearlyIncome = chartData.reduce((s, d) => s + d.income, 0);
+  1601→  1601→
+  1602→  1602→  const downloadCSV = () => {
+  1603→  1603→    const rows = [
+  1604→  1604→      ["মাস", "আয় (৳)", "বুকড সিট"],
+  1605→  1605→      ...chartData.map((d) => [d.month, String(d.income), String(d.seats)]),
+  1606→  1606→      ["মোট", String(yearlyIncome), ""],
+  1607→  1607→    ];
+  1608→  1608→    const csv = rows.map((r) => r.join(",")).join("\n");
+  1609→  1609→    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  1610→  1610→    const url = URL.createObjectURL(blob);
+  1611→  1611→    const a = document.createElement("a");
+  1612→  1612→    a.href = url;
+  1613→  1613→    a.download = `income-report-${new Date().toISOString().slice(0, 10)}.csv`;
+  1614→  1614→    a.click();
+  1615→  1615→    URL.revokeObjectURL(url);
+  1616→  1616→    toast.success("আয়ের রিপোর্ট ডাউনলোড হচ্ছে...");
+  1617→  1617→  };
+  1618→  1618→
+  1619→  1619→  if (statsLoading) {
+  1620→  1620→    return (
+  1621→  1621→      <div className="space-y-4">
+  1622→  1622→        <Skeleton className="h-10 w-48" />
+  1623→  1623→        <Skeleton className="h-72 rounded-xl" />
+  1624→  1624→      </div>
+  1625→  1625→    );
+  1626→  1626→  }
+  1627→  1627→
+  1628→  1628→  return (
+  1629→  1629→    <div className="space-y-5">
+  1630→  1630→      <div className="flex flex-wrap items-center justify-between gap-3">
+  1631→  1631→        <div>
+  1632→  1632→          <h2 className="text-xl font-bold">আয়ের হিসাব</h2>
+  1633→  1633→          <p className="text-sm text-muted-foreground">মাসভিত্তিক আয় ও পেমেন্ট রিপোর্ট</p>
+  1634→  1634→        </div>
+  1635→  1635→        <Button variant="outline" onClick={downloadCSV}>
+  1636→  1636→          <Download className="h-4 w-4" /> রিপোর্ট ডাউনলোড (CSV)
+  1637→  1637→        </Button>
+  1638→  1638→      </div>
+  1639→  1639→
+  1640→  1640→      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+  1641→  1641→        <Card className="gap-2 p-4">
+  1642→  1642→          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+  1643→  1643→            <Wallet className="h-4 w-4 text-primary" /> এই মাসের আয়
+  1644→  1644→          </div>
+  1645→  1645→          <div className="text-2xl font-bold text-primary">{formatTaka(baseIncome)}</div>
+  1646→  1646→        </Card>
+  1647→  1647→        <Card className="gap-2 p-4">
+  1648→  1648→          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+  1649→  1649→            <TrendingUp className="h-4 w-4 text-emerald-600" /> ৬ মাসের আয়
+  1650→  1650→          </div>
+  1651→  1651→          <div className="text-2xl font-bold">{formatTaka(yearlyIncome)}</div>
+  1652→  1652→        </Card>
+  1653→  1653→        <Card className="gap-2 p-4">
+  1654→  1654→          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+  1655→  1655→            <BedDouble className="h-4 w-4 text-amber-600" /> বুকড সিট
+  1656→  1656→          </div>
+  1657→  1657→          <div className="text-2xl font-bold">{bn(stats?.bookedSeats ?? 0)}</div>
+  1658→  1658→        </Card>
+  1659→  1659→        <Card className="gap-2 p-4">
+  1660→  1660→          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+  1661→  1661→            <Clock className="h-4 w-4 text-rose-600" /> পেন্ডিং পেমেন্ট
+  1662→  1662→          </div>
+  1663→  1663→          <div className="text-2xl font-bold">{formatTaka(0)}</div>
+  1664→  1664→        </Card>
+  1665→  1665→      </div>
+  1666→  1666→
+  1667→  1667→      <Card className="p-4">
+  1668→  1668→        <CardHeader className="px-0 pt-0">
+  1669→  1669→          <CardTitle className="text-base">৬ মাসের আয়ের ট্রেন্ড</CardTitle>
+  1670→  1670→          <CardDescription>শেষ ৬ মাসের মাসিক আয়ের লেখচিত্র</CardDescription>
+  1671→  1671→        </CardHeader>
+  1672→  1672→        <CardContent className="px-0 pb-0">
+  1673→  1673→          <ResponsiveContainer width="100%" height={280}>
+  1674→  1674→            <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+  1675→  1675→              <defs>
+  1676→  1676→                <linearGradient id="incomeGrad" x1="0" y1="0" x2="0" y2="1">
+  1677→  1677→                  <stop offset="5%" stopColor="#00A885" stopOpacity={0.5} />
+  1678→  1678→                  <stop offset="95%" stopColor="#00A885" stopOpacity={0.02} />
+  1679→  1679→                </linearGradient>
+  1680→  1680→              </defs>
+  1681→  1681→              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" vertical={false} />
+  1682→  1682→              <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+  1683→  1683→              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${bn(Math.round(v / 1000))}k`} />
+  1684→  1684→              <Tooltip
+  1685→  1685→                contentStyle={{ borderRadius: 8, border: "1px solid hsl(var(--border))", fontSize: 12 }}
+  1686→  1686→                formatter={(v: number) => [formatTaka(v), "আয়"]}
+  1687→  1687→              />
+  1688→  1688→              <Area
+  1689→  1689→                type="monotone"
+  1690→  1690→                dataKey="income"
+  1691→  1691→                stroke="#00A885"
+  1692→  1692→                strokeWidth={2.5}
+  1693→  1693→                fill="url(#incomeGrad)"
+  1694→  1694→                dot={{ r: 3, fill: "#00A885" }}
+  1695→  1695→              />
+  1696→  1696→            </AreaChart>
+  1697→  1697→          </ResponsiveContainer>
+  1698→  1698→        </CardContent>
+  1699→  1699→      </Card>
+  1700→  1700→
+  1701→  1701→      <Card className="p-4">
+  1702→  1702→        <CardHeader className="px-0 pt-0">
+  1703→  1703→          <CardTitle className="text-base">মেস অনুযায়ী মাসিক আয়</CardTitle>
+  1704→  1704→          <CardDescription>প্রতিটি মেস থেকে প্রত্যাশিত মাসিক আয়</CardDescription>
+  1705→  1705→        </CardHeader>
+  1706→  1706→        <CardContent className="px-0 pb-0">
+  1707→  1707→          {messes.length === 0 ? (
+  1708→  1708→            <EmptyState title="কোনো মেস নেই" desc="" />
+  1709→  1709→          ) : (
+  1710→  1710→            <div className="space-y-2">
+  1711→  1711→              {messes.map((m) => {
+  1712→  1712→                const income = messIncome(m, seatOverrides);
+  1713→  1713→                const max = Math.max(1, ...messes.map((mm) => messIncome(mm, seatOverrides)));
+  1714→  1714→                const pct = max ? Math.round((income / max) * 100) : 0;
+  1715→  1715→                return (
+  1716→  1716→                  <div key={m.id} className="flex items-center gap-3">
+  1717→  1717→                    <div className="w-32 shrink-0 truncate text-sm font-medium">{m.name}</div>
+  1718→  1718→                    <Progress value={pct} className="h-2 flex-1" />
+  1719→  1719→                    <div className="w-24 shrink-0 text-right text-sm font-semibold text-primary">
+  1720→  1720→                      {formatTaka(income)}
+  1721→  1721→                    </div>
+  1722→  1722→                  </div>
+  1723→  1723→                );
+  1724→  1724→              })}
+  1725→  1725→            </div>
+  1726→  1726→          )}
+  1727→  1727→        </CardContent>
+  1728→  1728→      </Card>
+  1729→  1729→    </div>
+  1730→  1730→  );
+  1731→  1731→}
+  1732→  1732→
+  1733→  1733→// ----------------------------------------------------------------------------
+  1734→  1734→// Reviews tab
+  1735→  1735→// ----------------------------------------------------------------------------
+  1736→  1736→
+  1737→  1737→function ReviewsTab({
+  1738→  1738→  messes,
+  1739→  1739→  loading,
+  1740→  1740→  selectedMess,
+  1741→  1741→  onSelectMess,
+  1742→  1742→}: {
+  1743→  1743→  messes: OwnerMess[];
+  1744→  1744→  loading: boolean;
+  1745→  1745→  selectedMess: OwnerMess | null;
+  1746→  1746→  onSelectMess: (id: string) => void;
+  1747→  1747→}) {
+  1748→  1748→  const [reviews, setReviews] = useState<OwnerReview[]>([]);
+  1749→  1749→  const [fetching, setFetching] = useState(true);
+  1750→  1750→  const [replies, setReplies] = useState<Record<string, string>>({});
+  1751→  1751→  const [savedReplies, setSavedReplies] = useState<Record<string, string>>({});
+  1752→  1752→  const [savingId, setSavingId] = useState<string | null>(null);
+  1753→  1753→
+  1754→  1754→  useEffect(() => {
+  1755→  1755→    if (!selectedMess) return;
+  1756→  1756→    let cancelled = false;
+  1757→  1757→    fetch(`/api/reviews?messId=${selectedMess.id}`)
+  1758→  1758→      .then((r) => r.json())
+  1759→  1759→      .then((d) => {
+  1760→  1760→        if (cancelled) return;
+  1761→  1761→        setReviews(d.reviews ?? []);
+  1762→  1762→        const init: Record<string, string> = {};
+  1763→  1763→        for (const rv of d.reviews ?? []) {
+  1764→  1764→          if (rv.ownerReply) init[rv.id] = rv.ownerReply;
+  1765→  1765→        }
+  1766→  1766→        setReplies(init);
+  1767→  1767→      })
+  1768→  1768→      .catch(() => {
+  1769→  1769→        if (!cancelled) setReviews([]);
+  1770→  1770→      })
+  1771→  1771→      .finally(() => {
+  1772→  1772→        if (!cancelled) setFetching(false);
+  1773→  1773→      });
+  1774→  1774→    return () => {
+  1775→  1775→      cancelled = true;
+  1776→  1776→    };
+  1777→  1777→  }, [selectedMess]);
+  1778→  1778→
+  1779→  1779→  if (loading) {
+  1780→  1780→    return (
+  1781→  1781→      <div className="space-y-4">
+  1782→  1782→        <Skeleton className="h-10 w-48" />
+  1783→  1783→        <Skeleton className="h-64 rounded-xl" />
+  1784→  1784→      </div>
+  1785→  1785→    );
+  1786→  1786→  }
+  1787→  1787→
+  1788→  1788→  if (messes.length === 0) {
+  1789→  1789→    return <EmptyState title="কোনো মেস নেই" desc="রিভিউ দেখতে প্রথমে মেস যোগ করুন" />;
+  1790→  1790→  }
+  1791→  1791→
+  1792→  1792→  const avgRating = reviews.length
+  1793→  1793→    ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length
+  1794→  1794→    : selectedMess?.rating ?? 0;
+  1795→  1795→
+  1796→  1796→  return (
+  1797→  1797→    <div className="space-y-5">
+  1798→  1798→      <div className="flex flex-wrap items-center justify-between gap-3">
+  1799→  1799→        <div>
+  1800→  1800→          <h2 className="text-xl font-bold">রিভিউ ও মতামত</h2>
+  1801→  1801→          <p className="text-sm text-muted-foreground">
+  1802→  1802→            গড় রেটিং: <span className="font-semibold text-amber-600">{bn(avgRating.toFixed(1))}</span> ({bn(reviews.length)} টি রিভিউ)
+  1803→  1803→          </p>
+  1804→  1804→        </div>
+  1805→  1805→        <Select value={selectedMess?.id ?? ""} onValueChange={onSelectMess}>
+  1806→  1806→          <SelectTrigger className="w-[220px]">
+  1807→  1807→            <Building2 className="h-4 w-4" />
+  1808→  1808→            <SelectValue placeholder="মেস নির্বাচন করুন" />
+  1809→  1809→          </SelectTrigger>
+  1810→  1810→          <SelectContent>
+  1811→  1811→            {messes.map((m) => (
+  1812→  1812→              <SelectItem key={m.id} value={m.id}>
+  1813→  1813→                {m.name}
+  1814→  1814→              </SelectItem>
+  1815→  1815→            ))}
+  1816→  1816→          </SelectContent>
+  1817→  1817→        </Select>
+  1818→  1818→      </div>
+  1819→  1819→
+  1820→  1820→      {fetching ? (
+  1821→  1821→        <div className="space-y-3">
+  1822→  1822→          {[1, 2].map((i) => (
+  1823→  1823→            <Skeleton key={i} className="h-32 rounded-xl" />
+  1824→  1824→          ))}
+  1825→  1825→        </div>
+  1826→  1826→      ) : reviews.length === 0 ? (
+  1827→  1827→        <EmptyState title="কোনো রিভিউ নেই" desc="এই মেসে এখনও কেউ রিভিউ দেয়নি" />
+  1828→  1828→      ) : (
+  1829→  1829→        <div className="space-y-3">
+  1830→  1830→          {reviews.map((rv) => {
+  1831→  1831→            const saved = savedReplies[rv.id] ?? rv.ownerReply;
+  1832→  1832→            return (
+  1833→  1833→              <Card key={rv.id} className="gap-3 p-4">
+  1834→  1834→                <div className="flex items-start gap-3">
+  1835→  1835→                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-bold">
+  1836→  1836→                    {rv.userName.slice(0, 2)}
+  1837→  1837→                  </div>
+  1838→  1838→                  <div className="min-w-0 flex-1">
+  1839→  1839→                    <div className="flex flex-wrap items-center justify-between gap-2">
+  1840→  1840→                      <h3 className="font-bold">{rv.userName}</h3>
+  1841→  1841→                      <span className="text-[11px] text-muted-foreground">{bnDate(rv.createdAt)}</span>
+  1842→  1842→                    </div>
+  1843→  1843→                    <Rating value={rv.rating} count={undefined} showCount={false} size="sm" />
+  1844→  1844→                    <p className="mt-2 text-sm text-foreground">{rv.comment}</p>
+  1845→  1845→
+  1846→  1846→                    {saved && (
+  1847→  1847→                      <div className="mt-2 rounded-md border-l-2 border-primary bg-primary/5 px-3 py-2 text-xs">
+  1848→  1848→                        <div className="mb-0.5 flex items-center gap-1 font-semibold text-primary">
+  1849→  1849→                          <ShieldCheck className="h-3 w-3" /> আপনার উত্তর
+  1850→  1850→                        </div>
+  1851→  1851→                        {saved}
+  1852→  1852→                      </div>
+  1853→  1853→                    )}
+  1854→  1854→
+  1855→  1855→                    <div className="mt-2">
+  1856→  1856→                      <Label className="mb-1 text-xs text-muted-foreground">মালিক হিসেবে উত্তর দিন</Label>
+  1857→  1857→                      <Textarea
+  1858→  1858→                        value={replies[rv.id] ?? ""}
+  1859→  1859→                        onChange={(e) => setReplies({ ...replies, [rv.id]: e.target.value })}
+  1860→  1860→                        placeholder="রিভিউয়ের উত্তর লিখুন..."
+  1861→  1861→                        className="min-h-12 text-sm"
+  1862→  1862→                      />
+  1863→  1863→                      <Button
+  1864→  1864→                        size="sm"
+  1865→  1865→                        className="mt-2"
+  1866→  1866→                        disabled={savingId === rv.id || !(replies[rv.id]?.trim())}
+  1867→  1867→                        onClick={() => {
+  1868→  1868→                          setSavingId(rv.id);
+  1869→  1869→                          // Optimistic — no reply endpoint exists
+  1870→  1870→                          setTimeout(() => {
+  1871→  1871→                            setSavedReplies({ ...savedReplies, [rv.id]: replies[rv.id].trim() });
+  1872→  1872→                            setSavingId(null);
+  1873→  1873→                            toast.success("উত্তর সংরক্ষিত হয়েছে");
+  1874→  1874→                          }, 400);
+  1875→  1875→                        }}
+  1876→  1876→                      >
+  1877→  1877→                        {savingId === rv.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />}
+  1878→  1878→                        উত্তর সংরক্ষণ করুন
+  1879→  1879→                      </Button>
+  1880→  1880→                    </div>
+  1881→  1881→                  </div>
+  1882→  1882→                </div>
+  1883→  1883→              </Card>
+  1884→  1884→            );
+  1885→  1885→          })}
+  1886→  1886→        </div>
+  1887→  1887→      )}
+  1888→  1888→    </div>
+  1889→  1889→  );
+  1890→  1890→}
+  1891→  1891→
+  1892→  1892→// ----------------------------------------------------------------------------
+  1893→  1893→// Settings tab
+  1894→  1894→// ----------------------------------------------------------------------------
+  1895→  1895→
+  1896→  1896→function SettingsTab({ owner }: { owner: PublicUser }) {
+  1897→  1897→  const [name, setName] = useState(owner.name);
+  1898→  1898→  const [phone, setPhone] = useState(owner.phone);
+  1899→  1899→  const [email, setEmail] = useState(owner.email ?? "");
+  1900→  1900→  const [preferredAreas, setPreferredAreas] = useState(owner.preferredAreas ?? "");
+  1901→  1901→  const [saving, setSaving] = useState(false);
+  1902→  1902→
+  1903→  1903→  const isVerified = owner.status === "ACTIVE";
+  1904→  1904→
+  1905→  1905→  return (
+  1906→  1906→    <div className="space-y-5">
+  1907→  1907→      <div>
+  1908→  1908→        <h2 className="text-xl font-bold">প্রোফাইল ও সেটিংস</h2>
+  1909→  1909→        <p className="text-sm text-muted-foreground">আপনার একাউন্ট ও ভেরিফিকেশন তথ্য</p>
+  1910→  1910→      </div>
+  1911→  1911→
+  1912→  1912→      {/* Verification status */}
+  1913→  1913→      <Card className="p-5">
+  1914→  1914→        <CardHeader className="px-0 pt-0">
+  1915→  1915→          <CardTitle className="text-base flex items-center gap-2">
+  1916→  1916→            <ShieldCheck className="h-4 w-4 text-primary" /> ভেরিফিকেশন স্ট্যাটাস
+  1917→  1917→          </CardTitle>
+  1918→  1918→          <CardDescription>একাউন্ট যাচাইয়ের অবস্থা</CardDescription>
+  1919→  1919→        </CardHeader>
+  1920→  1920→        <CardContent className="px-0 pb-0 space-y-4">
+  1921→  1921→          <div className="flex items-center gap-3 rounded-lg border p-4">
+  1922→  1922→            <div
+  1923→  1923→              className={cn(
+  1924→  1924→                "flex h-12 w-12 items-center justify-center rounded-full",
+  1925→  1925→                isVerified ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+  1926→  1926→              )}
+  1927→  1927→            >
+  1928→  1928→              {isVerified ? <ShieldCheck className="h-6 w-6" /> : <ShieldAlert className="h-6 w-6" />}
+  1929→  1929→            </div>
+  1930→  1930→            <div className="flex-1">
+  1931→  1931→              <div className="flex items-center gap-2">
+  1932→  1932→                <h4 className="font-bold">{isVerified ? "ভেরিফায়েড মালিক" : "ভেরিফিকেশন অপেক্ষমাণ"}</h4>
+  1933→  1933→                {isVerified ? <VerifiedBadge /> : <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">PENDING</Badge>}
+  1934→  1934→              </div>
+  1935→  1935→              <p className="text-xs text-muted-foreground mt-0.5">
+  1936→  1936→                {isVerified
+  1937→  1937→                  ? "আপনার একাউন্ট যাচাই সম্পন্ন। আপনার মেসসমূহ প্রকাশিত আছে।"
+  1938→  1938→                  : "এডমিন আপনার ডকুমেন্ট যাচাই করছেন। অনুমোদনের পর মেস প্রকাশিত হবে।"}
+  1939→  1939→              </p>
+  1940→  1940→            </div>
+  1941→  1941→          </div>
+  1942→  1942→
+  1943→  1943→          <div className="rounded-lg border border-dashed p-4">
+  1944→  1944→            <div className="mb-2 flex items-center gap-2">
+  1945→  1945→              <FileText className="h-4 w-4 text-primary" />
+  1946→  1946→              <h5 className="text-sm font-semibold">পরিচয়পত্র ডকুমেন্ট</h5>
+  1947→  1947→            </div>
+  1948→  1948→            <p className="mb-3 text-xs text-muted-foreground">
+  1949→  1949→              NID / ট্রেড লাইসেন্স / মালিকানার দলিল আপলোড করুন। সর্বোচ্চ ৫MB (PDF/JPG/PNG)।
+  1950→  1950→            </p>
+  1951→  1951→            <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-primary/40 bg-primary/5 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/10">
+  1952→  1952→              <FileText className="h-4 w-4" />
+  1953→  1953→              ডকুমেন্ট পুনরায় আপলোড করুন
+  1954→  1954→              <input
+  1955→  1955→                type="file"
+  1956→  1956→                className="hidden"
+  1957→  1957→                onChange={() => toast.success("ডকুমেন্ট আপলোড সফল (ডেমো)")}
+  1958→  1958→              />
+  1959→  1959→            </label>
+  1960→  1960→          </div>
+  1961→  1961→        </CardContent>
+  1962→  1962→      </Card>
+  1963→  1963→
+  1964→  1964→      {/* Profile edit */}
+  1965→  1965→      <Card className="p-5">
+  1966→  1966→        <CardHeader className="px-0 pt-0">
+  1967→  1967→          <CardTitle className="text-base flex items-center gap-2">
+  1968→  1968→            <CircleUserRound className="h-4 w-4 text-primary" /> প্রোফাইল তথ্য
+  1969→  1969→          </CardTitle>
+  1970→  1970→          <CardDescription>নাম ও যোগাযোগের তথ্য আপডেট করুন</CardDescription>
+  1971→  1971→        </CardHeader>
+  1972→  1972→        <CardContent className="px-0 pb-0 space-y-3">
+  1973→  1973→          <div className="grid gap-3 sm:grid-cols-2">
+  1974→  1974→            <div className="space-y-1.5">
+  1975→  1975→              <Label>পূর্ণ নাম</Label>
+  1976→  1976→              <Input value={name} onChange={(e) => setName(e.target.value)} />
+  1977→  1977→            </div>
+  1978→  1978→            <div className="space-y-1.5">
+  1979→  1979→              <Label>ফোন নম্বর</Label>
+  1980→  1980→              <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+  1981→  1981→            </div>
+  1982→  1982→          </div>
+  1983→  1983→          <div className="grid gap-3 sm:grid-cols-2">
+  1984→  1984→            <div className="space-y-1.5">
+  1985→  1985→              <Label>ইমেইল (ঐচ্ছিক)</Label>
+  1986→  1986→              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+  1987→  1987→            </div>
+  1988→  1988→            <div className="space-y-1.5">
+  1989→  1989→              <Label>অগ্রাধিকার এলাকা</Label>
+  1990→  1990→              <Input value={preferredAreas} onChange={(e) => setPreferredAreas(e.target.value)} placeholder="মিরপুর, ধানমন্ডি" />
+  1991→  1991→            </div>
+  1992→  1992→          </div>
+  1993→  1993→          <Button
+  1994→  1994→            disabled={saving}
+  1995→  1995→            onClick={() => {
+  1996→  1996→              setSaving(true);
+  1997→  1997→              setTimeout(() => {
+  1998→  1998→                setSaving(false);
+  1999→  1999→                toast.success("প্রোফাইল আপডেট সংরক্ষিত হয়েছে (ডেমো)");
+  2000→  2000→              }, 500);
+
+[showing lines 1-2000 of 2002; use offset=2001 with limit to continue reading]

@@ -267,6 +267,8 @@ export async function seedDatabase() {
   await db.adminLog.deleteMany();
   await db.favorite.deleteMany();
   await db.review.deleteMany();
+  await db.payment.deleteMany();
+  await db.expense.deleteMany();
   await db.booking.deleteMany();
   await db.seat.deleteMany();
   await db.room.deleteMany();
@@ -412,9 +414,12 @@ export async function seedDatabase() {
     }
   }
 
-  // Create a couple of bookings for the first seeker
-  const allMesses = await db.mess.findMany({ include: { rooms: { include: { seats: true } } } });
+  // Create CONFIRMED bookings for many seekers across messes (for realistic finance data)
+  const allMesses = await db.mess.findMany({ include: { rooms: { include: { seats: true } }, owner: true } });
+  const bookingsCreated: { booking: any; seat: any; mess: any; seeker: any }[] = [];
+
   if (allMesses.length > 0 && seekers.length > 0) {
+    // Booking 1: seeker 0, mess 0, pending
     const m0 = allMesses[0];
     const seat0 = m0.rooms[0]?.seats[0];
     if (seat0) {
@@ -426,27 +431,181 @@ export async function seedDatabase() {
           seekerId: seekers[0].id,
           moveInDate: new Date(Date.now() + 7 * 86400000),
           duration: "৬ মাস",
+          durationMonths: 6,
           message: "আগামী মাসের ১ তারিখ থেকে থাকতে চাই।",
           status: "PENDING",
+          agreedRent: seat0.rent,
+          securityDeposit: seat0.rent * 2,
         },
       });
     }
-    const m2 = allMesses[2];
-    const seat2 = m2?.rooms[0]?.seats[0];
-    if (seat2) {
-      await db.booking.create({
+
+    // Create confirmed bookings for various seekers on BOOKED seats across all messes
+    let bookingRef = 4513;
+    for (let mi = 0; mi < allMesses.length; mi++) {
+      const mess = allMesses[mi];
+      const bookedSeats: any[] = [];
+      for (const room of mess.rooms) {
+        for (const seat of room.seats) {
+          if (seat.status === "BOOKED") bookedSeats.push(seat);
+        }
+      }
+      // assign seekers to booked seats
+      for (let si = 0; si < Math.min(bookedSeats.length, 5); si++) {
+        const seat = bookedSeats[si];
+        const seeker = seekers[(mi + si) % seekers.length];
+        const moveInMonthsAgo = 1 + (si % 6); // 1 to 6 months ago
+        const moveInDate = new Date();
+        moveInDate.setMonth(moveInDate.getMonth() - moveInMonthsAgo);
+        moveInDate.setDate(1);
+        const durationMonths = 12;
+        const ref = `MF-2026-${bookingRef++}`;
+        const booking = await db.booking.create({
+          data: {
+            reference: ref,
+            seatId: seat.id,
+            messId: mess.id,
+            seekerId: seeker.id,
+            moveInDate,
+            duration: `${durationMonths} মাস`,
+            durationMonths,
+            message: "",
+            status: "CONFIRMED",
+            agreedRent: seat.rent,
+            securityDeposit: seat.rent * 2,
+          },
+        });
+        bookingsCreated.push({ booking, seat, mess, seeker });
+      }
+    }
+  }
+
+  // Create monthly rent payments for each confirmed booking
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const PAYMENT_METHODS = ["CASH", "BKASH", "NAGAD", "BANK"];
+
+  for (const { booking, seat, mess, seeker } of bookingsCreated) {
+    const moveIn = new Date(booking.moveInDate);
+    // generate payments from moveIn month to current month
+    let iter = new Date(moveIn.getFullYear(), moveIn.getMonth(), 1);
+    let monthCount = 0;
+    while (iter <= now && monthCount < 12) {
+      const monthKey = `${iter.getFullYear()}-${String(iter.getMonth() + 1).padStart(2, "0")}`;
+      const dueDate = new Date(iter.getFullYear(), iter.getMonth(), 5); // due on 5th
+      const isPast = dueDate < now;
+      const isCurrent = monthKey === currentMonthKey;
+
+      // 80% paid on time, 15% overdue, 5% current-month-due
+      const rand = (booking.reference.charCodeAt(booking.reference.length - 1) + monthCount) % 20;
+      let status = "DUE";
+      let paidDate: Date | null = null;
+      let method: string | null = null;
+
+      if (isPast) {
+        if (rand < 16) {
+          status = "PAID";
+          paidDate = new Date(dueDate.getTime() - (rand % 3) * 86400000);
+          method = PAYMENT_METHODS[rand % PAYMENT_METHODS.length];
+        } else {
+          status = "OVERDUE";
+        }
+      } else if (isCurrent) {
+        if (rand < 8) {
+          status = "PAID";
+          paidDate = new Date(now.getTime() - (rand % 5) * 86400000);
+          method = PAYMENT_METHODS[rand % PAYMENT_METHODS.length];
+        } else {
+          status = "DUE";
+        }
+      } else {
+        status = "PAID";
+        paidDate = new Date(dueDate.getTime());
+        method = PAYMENT_METHODS[rand % PAYMENT_METHODS.length];
+      }
+
+      await db.payment.create({
         data: {
-          reference: "MF-2026-04513",
-          seatId: seat2.id,
-          messId: m2.id,
-          seekerId: seekers[0].id,
-          moveInDate: new Date(Date.now() - 30 * 86400000),
-          duration: "১২ মাস",
-          message: "",
-          status: "CONFIRMED",
+          bookingId: booking.id,
+          seekerId: seeker.id,
+          messId: mess.id,
+          amount: seat.rent,
+          type: "RENT",
+          month: monthKey,
+          dueDate,
+          paidDate,
+          status,
+          method,
+          reference: method ? `${method}-${monthKey}-${booking.reference.slice(-4)}` : null,
         },
       });
+
+      iter.setMonth(iter.getMonth() + 1);
+      monthCount++;
     }
+
+    // Security deposit payment (one-time, paid at move-in)
+    await db.payment.create({
+      data: {
+        bookingId: booking.id,
+        seekerId: seeker.id,
+        messId: mess.id,
+        amount: booking.securityDeposit,
+        type: "DEPOSIT",
+        month: `${new Date(booking.moveInDate).getFullYear()}-${String(new Date(booking.moveInDate).getMonth() + 1).padStart(2, "0")}`,
+        dueDate: new Date(booking.moveInDate),
+        paidDate: new Date(booking.moveInDate),
+        status: "PAID",
+        method: PAYMENT_METHODS[booking.reference.charCodeAt(booking.reference.length - 1) % PAYMENT_METHODS.length],
+        reference: `DEP-${booking.reference.slice(-4)}`,
+        note: "সিকিউরিটি ডিপোজিট (২ মাসের ভাড়া)",
+      },
+    });
+  }
+
+  // Create expenses for each mess (utilities, maintenance, salary, etc.)
+  const EXPENSE_CATS: { cat: string; desc: string; base: number }[] = [
+    { cat: "UTILITY", desc: "বিদ্যুৎ বিল", base: 3500 },
+    { cat: "UTILITY", desc: "পানি বিল", base: 800 },
+    { cat: "UTILITY", desc: "ইন্টারনেট বিল", base: 1500 },
+    { cat: "UTILITY", desc: "গ্যাস বিল", base: 600 },
+    { cat: "SALARY", desc: "কেয়ারটেকার বেতন", base: 8000 },
+    { cat: "CLEANING", desc: "পরিচ্ছন্নতা খরচ", base: 2000 },
+    { cat: "SECURITY", desc: "নিরাপত্তা গার্ড", base: 6000 },
+    { cat: "MAINTENANCE", desc: "মেইনটেন্স ও মেরামত", base: 1500 },
+  ];
+
+  for (const mess of allMesses) {
+    // generate 3 months of recurring expenses
+    for (let mOff = 2; mOff >= 0; mOff--) {
+      const expDate = new Date(now.getFullYear(), now.getMonth() - mOff, 10);
+      for (const exp of EXPENSE_CATS) {
+        const variance = 0.85 + (mess.name.charCodeAt(0) % 30) / 100;
+        await db.expense.create({
+          data: {
+            messId: mess.id,
+            ownerId: mess.ownerId,
+            category: exp.cat,
+            amount: Math.round(exp.base * variance),
+            description: exp.desc,
+            date: expDate,
+            recurring: true,
+          },
+        });
+      }
+    }
+    // one-time maintenance expense
+    await db.expense.create({
+      data: {
+        messId: mess.id,
+        ownerId: mess.ownerId,
+        category: "MAINTENANCE",
+        amount: 2500 + (mess.name.charCodeAt(0) % 20) * 100,
+        description: "পাম্প মেরামত",
+        date: new Date(now.getFullYear(), now.getMonth() - 1, 15),
+        recurring: false,
+      },
+    });
   }
 
   // Create favorites for seeker 0
@@ -459,10 +618,14 @@ export async function seedDatabase() {
     });
   }
 
+  // Set commission rate for owners (5%)
+  await db.user.updateMany({ where: { role: "OWNER" }, data: { commissionRate: 5.0 } });
+
   return {
     admin: admin.id,
     owners: owners.length,
     seekers: seekers.length,
     messes: MESSES.length,
+    bookings: bookingsCreated.length + 1,
   };
 }

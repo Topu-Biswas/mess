@@ -1,0 +1,2000 @@
+     1→"use client";
+     2→
+     3→import { useCallback, useEffect, useMemo, useState } from "react";
+     4→import {
+     5→  LayoutDashboard,
+     6→  Building2,
+     7→  Flag,
+     8→  Users,
+     9→  AlertTriangle,
+    10→  Settings,
+    11→  ScrollText,
+    12→  Shield,
+    13→  ShieldCheck,
+    14→  ShieldAlert,
+    15→  CheckCircle2,
+    16→  XCircle,
+    17→  Pause,
+    18→  Trash2,
+    19→  Search,
+    20→  Loader2,
+    21→  TrendingUp,
+    22→  UserPlus,
+    23→  CalendarCheck,
+    24→  FileWarning,
+    25→  Clock,
+    26→  Ban,
+    27→  RotateCcw,
+    28→  Eye,
+    29→  EyeOff,
+    30→  BadgeCheck,
+    31→  BadgeX,
+    32→  MessageSquare,
+    33→  Megaphone,
+    34→  Percent,
+    35→  Save,
+    36→  LogIn,
+    37→  ChevronRight,
+    38→  ArrowUpDown,
+    39→  RefreshCw,
+    40→} from "lucide-react";
+    41→import {
+    42→  BarChart,
+    43→  Bar,
+    44→  XAxis,
+    45→  YAxis,
+    46→  Tooltip,
+    47→  ResponsiveContainer,
+    48→  CartesianGrid,
+    49→  Cell,
+    50→} from "recharts";
+    51→import { useAppStore } from "@/lib/store";
+    52→import { toast } from "sonner";
+    53→import { cn } from "@/lib/utils";
+    54→import type { AdminTab, MessType, UserStatus } from "@/lib/types";
+    55→import { MESS_TYPE_LABELS } from "@/lib/types";
+    56→
+    57→import { Button } from "@/components/ui/button";
+    58→import { Input } from "@/components/ui/input";
+    59→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+    60→import { Badge } from "@/components/ui/badge";
+    61→import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+    62→import { Skeleton } from "@/components/ui/skeleton";
+    63→import { Textarea } from "@/components/ui/textarea";
+    64→import { Label } from "@/components/ui/label";
+    65→import { Checkbox } from "@/components/ui/checkbox";
+    66→import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+    67→import {
+    68→  Select,
+    69→  SelectContent,
+    70→  SelectItem,
+    71→  SelectTrigger,
+    72→  SelectValue,
+    73→} from "@/components/ui/select";
+    74→import {
+    75→  Table,
+    76→  TableBody,
+    77→  TableCell,
+    78→  TableHead,
+    79→  TableHeader,
+    80→  TableRow,
+    81→} from "@/components/ui/table";
+    82→import {
+    83→  AlertDialog,
+    84→  AlertDialogAction,
+    85→  AlertDialogCancel,
+    86→  AlertDialogContent,
+    87→  AlertDialogDescription,
+    88→  AlertDialogFooter,
+    89→  AlertDialogHeader,
+    90→  AlertDialogTitle,
+    91→} from "@/components/ui/alert-dialog";
+    92→import { ScrollArea } from "@/components/ui/scroll-area";
+    93→import { VerifiedBadge, MessTypeBadge, formatTaka } from "@/components/ui-bits";
+    94→
+    95→// ----------------------------------------------------------------------------
+    96→// Types
+    97→// ----------------------------------------------------------------------------
+    98→
+    99→interface OverviewData {
+   100→  overview: {
+   101→    totalMesses: number;
+   102→    totalUsers: number;
+   103→    totalBookings: number;
+   104→    newSignups: number;
+   105→    pendingOwners: number;
+   106→    reported: number;
+   107→    totalSeekers: number;
+   108→    totalOwners: number;
+   109→  };
+   110→  areaDemand: { area: string; count: number }[];
+   111→}
+   112→
+   113→interface AdminOwner {
+   114→  id: string;
+   115→  name: string;
+   116→  phone: string;
+   117→  email: string | null;
+   118→  status: UserStatus;
+   119→  avatar: string | null;
+   120→  messCount: number;
+   121→  createdAt: string;
+   122→}
+   123→
+   124→interface AdminListing {
+   125→  id: string;
+   126→  name: string;
+   127→  area: string;
+   128→  ownerName: string;
+   129→  ownerStatus: UserStatus;
+   130→  type: MessType;
+   131→  rentFrom: number;
+   132→  rating: number;
+   133→  verified: boolean;
+   134→  published: boolean;
+   135→  reported: boolean;
+   136→  reportReason: string | null;
+   137→  image: string;
+   138→  totalSeats: number;
+   139→  availableSeats: number;
+   140→  createdAt: string;
+   141→}
+   142→
+   143→interface AdminUser {
+   144→  id: string;
+   145→  name: string;
+   146→  phone: string;
+   147→  email: string | null;
+   148→  status: UserStatus;
+   149→  avatar: string | null;
+   150→  bookingCount: number;
+   151→  createdAt: string;
+   152→}
+   153→
+   154→interface AdminLog {
+   155→  id: string;
+   156→  action: string;
+   157→  target: string;
+   158→  reason: string | null;
+   159→  createdAt: string;
+   160→}
+   161→
+   162→// ----------------------------------------------------------------------------
+   163→// Constants & helpers
+   164→// ----------------------------------------------------------------------------
+   165→
+   166→const NAV: { key: AdminTab; label: string; icon: typeof LayoutDashboard }[] = [
+   167→  { key: "overview", label: "ওভারভিউ", icon: LayoutDashboard },
+   168→  { key: "owners", label: "মেস মালিক", icon: Building2 },
+   169→  { key: "listings", label: "লিস্টিং", icon: Flag },
+   170→  { key: "users", label: "ইউজার", icon: Users },
+   171→  { key: "reports", label: "রিপোর্ট", icon: AlertTriangle },
+   172→  { key: "config", label: "কনফিগ", icon: Settings },
+   173→  { key: "logs", label: "লগ", icon: ScrollText },
+   174→];
+   175→
+   176→function bn(n: number) {
+   177→  try {
+   178→    return n.toLocaleString("bn-BD");
+   179→  } catch {
+   180→    return String(n);
+   181→  }
+   182→}
+   183→
+   184→function timeAgo(iso: string) {
+   185→  const d = new Date(iso);
+   186→  const diff = Date.now() - d.getTime();
+   187→  const sec = Math.floor(diff / 1000);
+   188→  const min = Math.floor(sec / 60);
+   189→  const hr = Math.floor(min / 60);
+   190→  const day = Math.floor(hr / 24);
+   191→  if (day > 30) return d.toLocaleDateString("bn-BD");
+   192→  if (day > 0) return `${bn(day)} দিন আগে`;
+   193→  if (hr > 0) return `${bn(hr)} ঘন্টা আগে`;
+   194→  if (min > 0) return `${bn(min)} মিনিট আগে`;
+   195→  return "এইমাত্র";
+   196→}
+   197→
+   198→function statusBadge(status: UserStatus) {
+   199→  if (status === "ACTIVE")
+   200→    return (
+   201→      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-0">
+   202→        <CheckCircle2 className="h-3 w-3 mr-1" /> সক্রিয়
+   203→      </Badge>
+   204→    );
+   205→  if (status === "PENDING")
+   206→    return (
+   207→      <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border-0">
+   208→        <Clock className="h-3 w-3 mr-1" /> অপেক্ষমাণ
+   209→      </Badge>
+   210→    );
+   211→  return (
+   212→    <Badge variant="destructive">
+   213→      <Ban className="h-3 w-3 mr-1" /> সাসপেন্ডেড
+   214→    </Badge>
+   215→  );
+   216→}
+   217→
+   218→// ----------------------------------------------------------------------------
+   219→// Reason dialog (reusable)
+   220→// ----------------------------------------------------------------------------
+   221→
+   222→function ReasonDialog({
+   223→  open,
+   224→  onOpenChange,
+   225→  title,
+   226→  description,
+   227→  confirmLabel,
+   228→  loading,
+   229→  onConfirm,
+   230→}: {
+   231→  open: boolean;
+   232→  onOpenChange: (v: boolean) => void;
+   233→  title: string;
+   234→  description: string;
+   235→  confirmLabel: string;
+   236→  loading: boolean;
+   237→  onConfirm: (reason: string) => void;
+   238→}) {
+   239→  const [reason, setReason] = useState("");
+   240→  const handleOpenChange = (v: boolean) => {
+   241→    if (!v) setReason("");
+   242→    onOpenChange(v);
+   243→  };
+   244→  const handleConfirm = (e: React.MouseEvent) => {
+   245→    e.preventDefault();
+   246→    const trimmed = reason.trim();
+   247→    if (!trimmed) return;
+   248→    setReason("");
+   249→    onConfirm(trimmed);
+   250→  };
+   251→  const trimmed = reason.trim();
+   252→  return (
+   253→    <AlertDialog open={open} onOpenChange={handleOpenChange}>
+   254→      <AlertDialogContent>
+   255→        <AlertDialogHeader>
+   256→          <AlertDialogTitle>{title}</AlertDialogTitle>
+   257→          <AlertDialogDescription>{description}</AlertDialogDescription>
+   258→        </AlertDialogHeader>
+   259→        <div className="space-y-2">
+   260→          <Label htmlFor="reason-input" className="text-sm font-medium">
+   261→            কারণ <span className="text-destructive">*</span>
+   262→          </Label>
+   263→          <Textarea
+   264→            id="reason-input"
+   265→            value={reason}
+   266→            onChange={(e) => setReason(e.target.value)}
+   267→            placeholder="বিস্তারিত কারণ লিখুন (এটি লগে সংরক্ষিত হবে)…"
+   268→            rows={3}
+   269→          />
+   270→          <p className="text-xs text-muted-foreground">
+   271→            প্রতিটি সাসপেন্ড/রিমুভ অ্যাকশন অডিট লগে লেখা হবে।
+   272→          </p>
+   273→        </div>
+   274→        <AlertDialogFooter>
+   275→          <AlertDialogCancel disabled={loading}>বাতিল</AlertDialogCancel>
+   276→          <AlertDialogAction
+   277→            disabled={loading || !trimmed}
+   278→            onClick={handleConfirm}
+   279→            className="bg-destructive text-white hover:bg-destructive/90"
+   280→          >
+   281→            {loading && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+   282→            {confirmLabel}
+   283→          </AlertDialogAction>
+   284→        </AlertDialogFooter>
+   285→      </AlertDialogContent>
+   286→    </AlertDialog>
+   287→  );
+   288→}
+   289→
+   290→// ----------------------------------------------------------------------------
+   291→// Skeleton helpers
+   292→// ----------------------------------------------------------------------------
+   293→
+   294→function KPISkeleton() {
+   295→  return (
+   296→    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+   297→      {Array.from({ length: 6 }).map((_, i) => (
+   298→        <Card key={i} className="p-4">
+   299→          <Skeleton className="h-9 w-9 rounded-lg" />
+   300→          <Skeleton className="h-7 w-16 mt-3" />
+   301→          <Skeleton className="h-3 w-20 mt-2" />
+   302→        </Card>
+   303→      ))}
+   304→    </div>
+   305→  );
+   306→}
+   307→
+   308→function RowSkeleton({ rows = 5 }: { rows?: number }) {
+   309→  return (
+   310→    <div className="space-y-3">
+   311→      {Array.from({ length: rows }).map((_, i) => (
+   312→        <Skeleton key={i} className="h-16 w-full rounded-lg" />
+   313→      ))}
+   314→    </div>
+   315→  );
+   316→}
+   317→
+   318→// ----------------------------------------------------------------------------
+   319→// Gate
+   320→// ----------------------------------------------------------------------------
+   321→
+   322→function AdminGate() {
+   323→  const openAuth = useAppStore((s) => s.openAuth);
+   324→  return (
+   325→    <div className="mx-auto max-w-md px-4 py-20">
+   326→      <Card className="overflow-hidden border-0 shadow-lg">
+   327→        <CardContent className="p-0">
+   328→          <div className="bg-gradient-to-br from-primary to-emerald-700 p-8 text-center text-primary-foreground">
+   329→            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 backdrop-blur">
+   330→              <Shield className="h-8 w-8" />
+   331→            </div>
+   332→            <h2 className="text-2xl font-bold">এডমিন প্যানেল</h2>
+   333→            <p className="mt-1 text-primary-foreground/80 text-sm">
+   334→              এই পেজ দেখতে এডমিন অ্যাকাউন্ট প্রয়োজন
+   335→            </p>
+   336→          </div>
+   337→          <div className="p-6 space-y-4">
+   338→            <div className="rounded-lg border border-dashed bg-muted/40 p-4 text-sm">
+   339→              <p className="font-semibold mb-1">ডেমো এডমিন লগইন</p>
+   340→              <p className="text-muted-foreground">
+   341→                ফোন: <span className="font-mono font-semibold">01700000000</span>
+   342→              </p>
+   343→              <p className="text-muted-foreground">
+   344→                পাসওয়ার্ড: <span className="font-mono font-semibold">admin123</span>
+   345→              </p>
+   346→            </div>
+   347→            <Button className="w-full" size="lg" onClick={() => openAuth("login", "SEEKER")}>
+   348→              <LogIn className="h-4 w-4 mr-2" /> এডমিন হিসেবে লগইন করুন
+   349→            </Button>
+   350→            <p className="text-xs text-center text-muted-foreground">
+   351→              এডমিন সিকার ট্যাবে লগইন করেন, কিন্তু এডমিন ক্রেডেনশিয়াল ব্যবহার করে।
+   352→            </p>
+   353→          </div>
+   354→        </CardContent>
+   355→      </Card>
+   356→    </div>
+   357→  );
+   358→}
+   359→
+   360→// ----------------------------------------------------------------------------
+   361→// Overview tab
+   362→// ----------------------------------------------------------------------------
+   363→
+   364→function OverviewTab() {
+   365→  const [data, setData] = useState<OverviewData | null>(null);
+   366→  const [loading, setLoading] = useState(true);
+   367→  const [error, setError] = useState(false);
+   368→
+   369→  const [retryCount, setRetryCount] = useState(0);
+   370→
+   371→  useEffect(() => {
+   372→    let cancelled = false;
+   373→    // eslint-disable-next-line react-hooks/set-state-in-effect
+   374→    setLoading(true);
+   375→    setError(false);
+   376→    fetch("/api/admin/overview")
+   377→      .then((r) => r.json())
+   378→      .then((d) => { if (!cancelled) setData(d); })
+   379→      .catch(() => { if (!cancelled) { setError(true); toast.error("ওভারভিউ লোড ব্যর্থ"); } })
+   380→      .finally(() => { if (!cancelled) setLoading(false); });
+   381→    return () => { cancelled = true; };
+   382→  }, [retryCount]);
+   383→
+   384→  const load = useCallback(() => setRetryCount((c) => c + 1), []);
+   385→
+   386→  if (loading && !data) {
+   387→    return (
+   388→      <div className="space-y-6">
+   389→        <KPISkeleton />
+   390→        <Card className="p-4">
+   391→          <Skeleton className="h-6 w-40 mb-4" />
+   392→          <Skeleton className="h-64 w-full" />
+   393→        </Card>
+   394→      </div>
+   395→    );
+   396→  }
+   397→
+   398→  if (error && !data) {
+   399→    return (
+   400→      <Card className="p-8 text-center">
+   401→        <AlertTriangle className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+   402→        <p className="text-sm text-muted-foreground mb-4">ওভারভিউ লোড করতে সমস্যা হয়েছে।</p>
+   403→        <Button size="sm" variant="outline" onClick={load}>
+   404→          <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> আবার চেষ্টা করুন
+   405→        </Button>
+   406→      </Card>
+   407→    );
+   408→  }
+   409→
+   410→  const { overview: o } = data;
+   411→  const kpis = [
+   412→    { icon: Building2, label: "মোট মেস", value: bn(o.totalMesses), tint: "text-emerald-600 bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300" },
+   413→    { icon: Users, label: "মোট ইউজার", value: bn(o.totalUsers), tint: "text-sky-600 bg-sky-100 dark:bg-sky-950 dark:text-sky-300" },
+   414→    { icon: CalendarCheck, label: "মোট বুকিং", value: bn(o.totalBookings), tint: "text-violet-600 bg-violet-100 dark:bg-violet-950 dark:text-violet-300" },
+   415→    { icon: UserPlus, label: "নতুন সাইনআপ (৩০দিন)", value: bn(o.newSignups), tint: "text-amber-600 bg-amber-100 dark:bg-amber-950 dark:text-amber-300" },
+   416→    { icon: FileWarning, label: "রিপোর্টেড ইস্যু", value: bn(o.reported), tint: "text-red-600 bg-red-100 dark:bg-red-950 dark:text-red-300" },
+   417→    { icon: Clock, label: "পেন্ডিং মালিক", value: bn(o.pendingOwners), tint: "text-orange-600 bg-orange-100 dark:bg-orange-950 dark:text-orange-300" },
+   418→  ];
+   419→
+   420→  const maxCount = Math.max(...data.areaDemand.map((d) => d.count), 1);
+   421→
+   422→  return (
+   423→    <div className="space-y-6">
+   424→      {/* KPI grid */}
+   425→      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+   426→        {kpis.map((k) => (
+   427→          <Card key={k.label} className="p-4 hover:shadow-md transition-shadow">
+   428→            <div className={cn("flex h-10 w-10 items-center justify-center rounded-lg", k.tint)}>
+   429→              <k.icon className="h-5 w-5" />
+   430→            </div>
+   431→            <div className="mt-3 text-2xl font-extrabold tracking-tight">{k.value}</div>
+   432→            <div className="text-xs text-muted-foreground mt-0.5">{k.label}</div>
+   433→          </Card>
+   434→        ))}
+   435→      </div>
+   436→
+   437→      {/* User breakdown + area demand */}
+   438→      <div className="grid lg:grid-cols-3 gap-4">
+   439→        <Card className="lg:col-span-2">
+   440→          <CardHeader>
+   441→            <CardTitle className="flex items-center gap-2 text-base">
+   442→              <TrendingUp className="h-4 w-4 text-primary" /> এলাকা ভিত্তিক মেস ডিমান্ড
+   443→            </CardTitle>
+   444→            <CardDescription>কোন এলাকায় সবচেয়ে বেশি মেস লিস্টেড আছে</CardDescription>
+   445→          </CardHeader>
+   446→          <CardContent>
+   447→            {data.areaDemand.length === 0 ? (
+   448→              <div className="py-10 text-center text-sm text-muted-foreground">
+   449→                কোনো এলাকার ডেটা পাওয়া যায়নি
+   450→              </div>
+   451→            ) : (
+   452→              <div className="h-72 w-full">
+   453→                <ResponsiveContainer width="100%" height="100%">
+   454→                  <BarChart
+   455→                    data={data.areaDemand.slice(0, 10)}
+   456→                    layout="vertical"
+   457→                    margin={{ top: 4, right: 16, bottom: 4, left: 8 }}
+   458→                  >
+   459→                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="oklch(0.92 0 0)" />
+   460→                    <XAxis type="number" tick={{ fontSize: 11 }} stroke="oklch(0.5 0 0)" />
+   461→                    <YAxis
+   462→                      type="category"
+   463→                      dataKey="area"
+   464→                      width={80}
+   465→                      tick={{ fontSize: 12 }}
+   466→                      stroke="oklch(0.5 0 0)"
+   467→                    />
+   468→                    <Tooltip
+   469→                      cursor={{ fill: "oklch(0.96 0 0)" }}
+   470→                      contentStyle={{
+   471→                        borderRadius: 8,
+   472→                        border: "1px solid oklch(0.9 0 0)",
+   473→                        fontSize: 12,
+   474→                      }}
+   475→                      formatter={(v: number) => [`${bn(v)} টি মেস`, "মেস"]}
+   476→                    />
+   477→                    <Bar dataKey="count" radius={[0, 6, 6, 0]}>
+   478→                      {data.areaDemand.slice(0, 10).map((d, i) => (
+   479→                        <Cell
+   480→                          key={d.area}
+   481→                          fill={i === 0 ? "oklch(0.69 0.15 165)" : "oklch(0.69 0.15 165 / 0.6)"}
+   482→                        />
+   483→                      ))}
+   484→                    </Bar>
+   485→                  </BarChart>
+   486→                </ResponsiveContainer>
+   487→              </div>
+   488→            )}
+   489→          </CardContent>
+   490→        </Card>
+   491→
+   492→        <Card>
+   493→          <CardHeader>
+   494→            <CardTitle className="text-base">ইউজার ব্রেকডাউন</CardTitle>
+   495→            <CardDescription>রোল অনুযায়ী বণ্টন</CardDescription>
+   496→          </CardHeader>
+   497→          <CardContent className="space-y-4">
+   498→            <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-3">
+   499→              <div className="flex items-center gap-2">
+   500→                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300">
+   501→                  <Users className="h-4 w-4" />
+   502→                </div>
+   503→                <span className="text-sm font-medium">সিকার</span>
+   504→              </div>
+   505→              <span className="text-lg font-bold">{bn(o.totalSeekers)}</span>
+   506→            </div>
+   507→            <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-3">
+   508→              <div className="flex items-center gap-2">
+   509→                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+   510→                  <Building2 className="h-4 w-4" />
+   511→                </div>
+   512→                <span className="text-sm font-medium">মেস মালিক</span>
+   513→              </div>
+   514→              <span className="text-lg font-bold">{bn(o.totalOwners)}</span>
+   515→            </div>
+   516→            <div className="flex items-center justify-between rounded-lg border bg-amber-50 border-amber-200 p-3 dark:bg-amber-950/30 dark:border-amber-900">
+   517→              <div className="flex items-center gap-2">
+   518→                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+   519→                  <Clock className="h-4 w-4" />
+   520→                </div>
+   521→                <span className="text-sm font-medium">পেন্ডিং মালিক</span>
+   522→              </div>
+   523→              <span className="text-lg font-bold text-amber-700 dark:text-amber-300">{bn(o.pendingOwners)}</span>
+   524→            </div>
+   525→            <Button
+   526→              variant="outline"
+   527→              size="sm"
+   528→              className="w-full"
+   529→              onClick={() => (window.location.hash = "#owners")}
+   530→            >
+   531→              পেন্ডিং অনুমোদনে যান <ChevronRight className="h-3.5 w-3.5" />
+   532→            </Button>
+   533→          </CardContent>
+   534→        </Card>
+   535→      </div>
+   536→
+   537→      {/* Area demand table (alt view, mobile-friendly) */}
+   538→      <Card>
+   539→        <CardHeader>
+   540→          <CardTitle className="text-base">এলাকা র‍্যাংকিং</CardTitle>
+   541→        </CardHeader>
+   542→        <CardContent>
+   543→          <div className="space-y-2">
+   544→            {data.areaDemand.slice(0, 8).map((d, i) => (
+   545→              <div key={d.area} className="flex items-center gap-3">
+   546→                <span className="w-6 text-sm font-bold text-muted-foreground">#{bn(i + 1)}</span>
+   547→                <span className="w-20 text-sm font-medium truncate">{d.area}</span>
+   548→                <div className="flex-1 h-6 rounded bg-muted overflow-hidden">
+   549→                  <div
+   550→                    className="h-full bg-primary/80 rounded transition-all"
+   551→                    style={{ width: `${(d.count / maxCount) * 100}%` }}
+   552→                  />
+   553→                </div>
+   554→                <span className="text-sm font-semibold w-12 text-right">{bn(d.count)}</span>
+   555→              </div>
+   556→            ))}
+   557→          </div>
+   558→        </CardContent>
+   559→      </Card>
+   560→    </div>
+   561→  );
+   562→}
+   563→
+   564→// ----------------------------------------------------------------------------
+   565→// Owners tab
+   566→// ----------------------------------------------------------------------------
+   567→
+   568→function OwnerRow({
+   569→  owner,
+   570→  onAction,
+   571→}: {
+   572→  owner: AdminOwner;
+   573→  onAction: (owner: AdminOwner, action: "approve" | "suspend" | "remove") => void;
+   574→}) {
+   575→  const isPending = owner.status === "PENDING";
+   576→  const isSuspended = owner.status === "SUSPENDED";
+   577→  return (
+   578→    <Card className="p-4 hover:shadow-md transition-shadow">
+   579→      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+   580→        <Avatar className="h-12 w-12 shrink-0">
+   581→          <AvatarImage src={owner.avatar ?? undefined} />
+   582→          <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+   583→            {owner.name.slice(0, 1)}
+   584→          </AvatarFallback>
+   585→        </Avatar>
+   586→        <div className="flex-1 min-w-0">
+   587→          <div className="flex flex-wrap items-center gap-2">
+   588→            <span className="font-semibold truncate">{owner.name}</span>
+   589→            {statusBadge(owner.status)}
+   590→            <Badge variant="secondary" className="border-0">
+   591→              <Building2 className="h-3 w-3 mr-1" /> {bn(owner.messCount)} টি মেস
+   592→            </Badge>
+   593→          </div>
+   594→          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+   595→            <span className="font-mono">{owner.phone}</span>
+   596→            {owner.email && <span>{owner.email}</span>}
+   597→            <span>যোগ দিয়েছেন {timeAgo(owner.createdAt)}</span>
+   598→          </div>
+   599→        </div>
+   600→        <div className="flex flex-wrap gap-2 shrink-0">
+   601→          {isPending && (
+   602→            <>
+   603→              <Button
+   604→                size="sm"
+   605→                className="bg-emerald-600 hover:bg-emerald-700"
+   606→                onClick={() => onAction(owner, "approve")}
+   607→              >
+   608→                <ShieldCheck className="h-3.5 w-3.5 mr-1" /> অনুমোদন
+   609→              </Button>
+   610→              <Button
+   611→                size="sm"
+   612→                variant="destructive"
+   613→                onClick={() => onAction(owner, "suspend")}
+   614→              >
+   615→                <XCircle className="h-3.5 w-3.5 mr-1" /> বাতিল
+   616→              </Button>
+   617→            </>
+   618→          )}
+   619→          {!isPending && !isSuspended && (
+   620→            <Button
+   621→              size="sm"
+   622→              variant="outline"
+   623→              onClick={() => onAction(owner, "suspend")}
+   624→            >
+   625→              <Pause className="h-3.5 w-3.5 mr-1" /> সাসপেন্ড
+   626→            </Button>
+   627→          )}
+   628→          {isSuspended && (
+   629→            <Button
+   630→              size="sm"
+   631→              className="bg-emerald-600 hover:bg-emerald-700"
+   632→              onClick={() => onAction(owner, "approve")}
+   633→            >
+   634→              <RotateCcw className="h-3.5 w-3.5 mr-1" /> পুনরুদ্ধার
+   635→            </Button>
+   636→          )}
+   637→          <Button
+   638→            size="sm"
+   639→            variant="ghost"
+   640→            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+   641→            onClick={() => onAction(owner, "remove")}
+   642→          >
+   643→            <Trash2 className="h-3.5 w-3.5 mr-1" /> রিমুভ
+   644→          </Button>
+   645→        </div>
+   646→      </div>
+   647→    </Card>
+   648→  );
+   649→}
+   650→
+   651→function OwnersTab() {
+   652→  const [tab, setTab] = useState<"pending" | "all">("pending");
+   653→  const [pending, setPending] = useState<AdminOwner[]>([]);
+   654→  const [all, setAll] = useState<AdminOwner[]>([]);
+   655→  const [loading, setLoading] = useState(true);
+   656→  const [search, setSearch] = useState("");
+   657→  const [statusFilter, setStatusFilter] = useState<"ALL" | UserStatus>("ALL");
+   658→  const [actionLoading, setActionLoading] = useState(false);
+   659→
+   660→  // reason dialog state
+   661→  const [reasonOpen, setReasonOpen] = useState(false);
+   662→  const [reasonOwner, setReasonOwner] = useState<AdminOwner | null>(null);
+   663→  const [reasonAction, setReasonAction] = useState<"suspend" | "remove">("suspend");
+   664→
+   665→  // approve confirm
+   666→  const [approveOpen, setApproveOpen] = useState(false);
+   667→  const [approveOwner, setApproveOwner] = useState<AdminOwner | null>(null);
+   668→
+   669→  const load = useCallback(async () => {
+   670→    try {
+   671→      const [p, a] = await Promise.all([
+   672→        fetch("/api/admin/owners?status=PENDING").then((r) => r.json()),
+   673→        fetch("/api/admin/owners").then((r) => r.json()),
+   674→      ]);
+   675→      setPending(p.owners ?? []);
+   676→      setAll(a.owners ?? []);
+   677→    } catch {
+   678→      toast.error("মালিক তালিকা লোড ব্যর্থ");
+   679→    } finally {
+   680→      setLoading(false);
+   681→    }
+   682→  }, []);
+   683→
+   684→  useEffect(() => {
+   685→    load();
+   686→  }, [load]);
+   687→
+   688→  const doAction = async (owner: AdminOwner, action: "approve" | "suspend" | "remove", reason?: string) => {
+   689→    setActionLoading(true);
+   690→    try {
+   691→      const res = await fetch("/api/admin/owners", {
+   692→        method: "PATCH",
+   693→        headers: { "Content-Type": "application/json" },
+   694→        body: JSON.stringify({ ownerId: owner.id, action, reason }),
+   695→      });
+   696→      if (!res.ok) throw new Error("অ্যাকশন ব্যর্থ");
+   697→      const labelMap: Record<string, string> = {
+   698→        approve: "অনুমোদিত হয়েছে",
+   699→        suspend: "সাসপেন্ড করা হয়েছে",
+   700→        remove: "রিমুভ করা হয়েছে",
+   701→      };
+   702→      toast.success(`${owner.name} — ${labelMap[action]}`);
+   703→      await load();
+   704→    } catch (e) {
+   705→      toast.error(e instanceof Error ? e.message : "অ্যাকশন ব্যর্থ");
+   706→    } finally {
+   707→      setActionLoading(false);
+   708→      setReasonOpen(false);
+   709→      setApproveOpen(false);
+   710→    }
+   711→  };
+   712→
+   713→  const onAction = (owner: AdminOwner, action: "approve" | "suspend" | "remove") => {
+   714→    if (action === "approve") {
+   715→      setApproveOwner(owner);
+   716→      setApproveOpen(true);
+   717→    } else {
+   718→      setReasonOwner(owner);
+   719→      setReasonAction(action);
+   720→      setReasonOpen(true);
+   721→    }
+   722→  };
+   723→
+   724→  const filteredAll = useMemo(() => {
+   725→    return all.filter((o) => {
+   726→      const q = search.trim().toLowerCase();
+   727→      const matches =
+   728→        !q ||
+   729→        o.name.toLowerCase().includes(q) ||
+   730→        o.phone.includes(q) ||
+   731→        (o.email ?? "").toLowerCase().includes(q);
+   732→      const stat = statusFilter === "ALL" || o.status === statusFilter;
+   733→      return matches && stat;
+   734→    });
+   735→  }, [all, search, statusFilter]);
+   736→
+   737→  return (
+   738→    <div className="space-y-5">
+   739→      <Tabs value={tab} onValueChange={(v) => setTab(v as "pending" | "all")}>
+   740→        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+   741→          <TabsList>
+   742→            <TabsTrigger value="pending" className="gap-1.5">
+   743→              <Clock className="h-3.5 w-3.5" />
+   744→              পেন্ডিং ভেরিফিকেশন
+   745→              {pending.length > 0 && (
+   746→                <Badge className="ml-1 bg-amber-500 text-white border-0 px-1.5 py-0 text-[10px]">
+   747→                  {bn(pending.length)}
+   748→                </Badge>
+   749→              )}
+   750→            </TabsTrigger>
+   751→            <TabsTrigger value="all">সব মালিক ({bn(all.length)})</TabsTrigger>
+   752→          </TabsList>
+   753→        </div>
+   754→
+   755→        <TabsContent value="pending" className="mt-4">
+   756→          {loading ? (
+   757→            <RowSkeleton />
+   758→          ) : pending.length === 0 ? (
+   759→            <Card className="p-10 text-center">
+   760→              <CheckCircle2 className="h-10 w-10 mx-auto text-emerald-500 mb-2" />
+   761→              <p className="font-semibold">কোনো পেন্ডিং মালিক নেই</p>
+   762→              <p className="text-sm text-muted-foreground">সব মালিক অনুমোদিত হয়ে গেছে।</p>
+   763→            </Card>
+   764→          ) : (
+   765→            <div className="space-y-3">
+   766→              {pending.map((o) => (
+   767→                <Card key={o.id} className="p-4 border-amber-200 bg-amber-50/40 dark:bg-amber-950/10 dark:border-amber-900">
+   768→                  <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+   769→                    <Avatar className="h-12 w-12 shrink-0">
+   770→                      <AvatarImage src={o.avatar ?? undefined} />
+   771→                      <AvatarFallback className="bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 font-semibold">
+   772→                        {o.name.slice(0, 1)}
+   773→                      </AvatarFallback>
+   774→                    </Avatar>
+   775→                    <div className="flex-1 min-w-0">
+   776→                      <div className="flex flex-wrap items-center gap-2">
+   777→                        <span className="font-semibold">{o.name}</span>
+   778→                        <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border-0">
+   779→                          <Clock className="h-3 w-3 mr-1" /> অপেক্ষমাণ
+   780→                        </Badge>
+   781→                      </div>
+   782→                      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+   783→                        <span className="font-mono">{o.phone}</span>
+   784→                        {o.email && <span>{o.email}</span>}
+   785→                        <span>যোগ দিয়েছেন {timeAgo(o.createdAt)}</span>
+   786→                      </div>
+   787→                      {/* Document placeholder */}
+   788→                      <div className="mt-3 rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-background/60 p-3">
+   789→                        <div className="flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-300">
+   790→                          <ShieldAlert className="h-4 w-4" /> ভেরিফিকেশন ডকুমেন্ট
+   791→                        </div>
+   792→                        <div className="mt-2 flex flex-wrap gap-2">
+   793→                          {["NID ফ্রন্ট", "NID ব্যাক", "ট্রেড লাইসেন্স"].map((d) => (
+   794→                            <div
+   795→                              key={d}
+   796→                              className="flex items-center gap-2 rounded-md border bg-muted/50 px-2.5 py-1.5 text-xs"
+   797→                            >
+   798→                              <div className="h-8 w-10 rounded bg-gradient-to-br from-muted-foreground/20 to-muted-foreground/10" />
+   799→                              <span>{d}.jpg</span>
+   800→                            </div>
+   801→                          ))}
+   802→                        </div>
+   803→                      </div>
+   804→                    </div>
+   805→                    <div className="flex flex-col gap-2 shrink-0">
+   806→                      <Button
+   807→                        size="sm"
+   808→                        className="bg-emerald-600 hover:bg-emerald-700"
+   809→                        onClick={() => onAction(o, "approve")}
+   810→                      >
+   811→                        <ShieldCheck className="h-3.5 w-3.5 mr-1" /> অনুমোদন
+   812→                      </Button>
+   813→                      <Button
+   814→                        size="sm"
+   815→                        variant="destructive"
+   816→                        onClick={() => onAction(o, "suspend")}
+   817→                      >
+   818→                        <XCircle className="h-3.5 w-3.5 mr-1" /> বাতিল
+   819→                      </Button>
+   820→                    </div>
+   821→                  </div>
+   822→                </Card>
+   823→              ))}
+   824→            </div>
+   825→          )}
+   826→        </TabsContent>
+   827→
+   828→        <TabsContent value="all" className="mt-4 space-y-4">
+   829→          <div className="flex flex-col sm:flex-row gap-2">
+   830→            <div className="relative flex-1">
+   831→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   832→              <Input
+   833→                value={search}
+   834→                onChange={(e) => setSearch(e.target.value)}
+   835→                placeholder="নাম, ফোন বা ইমেইল দিয়ে খুঁজুন…"
+   836→                className="pl-9"
+   837→              />
+   838→            </div>
+   839→            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "ALL" | UserStatus)}>
+   840→              <SelectTrigger className="w-full sm:w-44">
+   841→                <SelectValue placeholder="স্ট্যাটাস" />
+   842→              </SelectTrigger>
+   843→              <SelectContent>
+   844→                <SelectItem value="ALL">সব স্ট্যাটাস</SelectItem>
+   845→                <SelectItem value="ACTIVE">সক্রিয়</SelectItem>
+   846→                <SelectItem value="PENDING">অপেক্ষমাণ</SelectItem>
+   847→                <SelectItem value="SUSPENDED">সাসপেন্ডেড</SelectItem>
+   848→              </SelectContent>
+   849→            </Select>
+   850→          </div>
+   851→
+   852→          {loading ? (
+   853→            <RowSkeleton />
+   854→          ) : filteredAll.length === 0 ? (
+   855→            <Card className="p-10 text-center text-sm text-muted-foreground">
+   856→              কোনো মালিক পাওয়া যায়নি
+   857→            </Card>
+   858→          ) : (
+   859→            <div className="space-y-3">
+   860→              {filteredAll.map((o) => (
+   861→                <OwnerRow key={o.id} owner={o} onAction={onAction} />
+   862→              ))}
+   863→            </div>
+   864→          )}
+   865→        </TabsContent>
+   866→      </Tabs>
+   867→
+   868→      {/* Reason dialog for suspend/remove */}
+   869→      <ReasonDialog
+   870→        open={reasonOpen}
+   871→        onOpenChange={(v) => {
+   872→          setReasonOpen(v);
+   873→          if (!v) setReasonOwner(null);
+   874→        }}
+   875→        title={
+   876→          reasonAction === "suspend"
+   877→            ? "মালিক সাসপেন্ড করুন"
+   878→            : "মালিক রিমুভ করুন"
+   879→        }
+   880→        description={
+   881→          reasonOwner
+   882→            ? `${reasonOwner.name} কে ${reasonAction === "suspend" ? "সাসপেন্ড" : "সম্পূর্ণ রিমুভ"} করতে চান? অনুগ্রহ করে একটি কারণ দিন।`
+   883→            : ""
+   884→        }
+   885→        confirmLabel={reasonAction === "suspend" ? "সাসপেন্ড করুন" : "রিমুভ করুন"}
+   886→        loading={actionLoading}
+   887→        onConfirm={(reason) => {
+   888→          if (reasonOwner) doAction(reasonOwner, reasonAction, reason);
+   889→        }}
+   890→      />
+   891→
+   892→      {/* Approve confirm */}
+   893→      <AlertDialog open={approveOpen} onOpenChange={(v) => {
+   894→        setApproveOpen(v);
+   895→        if (!v) setApproveOwner(null);
+   896→      }}>
+   897→        <AlertDialogContent>
+   898→          <AlertDialogHeader>
+   899→            <AlertDialogTitle>মালিক অনুমোদন</AlertDialogTitle>
+   900→            <AlertDialogDescription>
+   901→              {approveOwner
+   902→                ? `${approveOwner.name} কে ভেরিফাই করে অনুমোদন দিতে চান? অনুমোদনের পর তিনি ড্যাশবোর্ড অ্যাক্সেস পাবেন।`
+   903→                : ""}
+   904→            </AlertDialogDescription>
+   905→          </AlertDialogHeader>
+   906→          <AlertDialogFooter>
+   907→            <AlertDialogCancel disabled={actionLoading}>বাতিল</AlertDialogCancel>
+   908→            <AlertDialogAction
+   909→              disabled={actionLoading}
+   910→              onClick={(e) => {
+   911→                e.preventDefault();
+   912→                if (approveOwner) doAction(approveOwner, "approve");
+   913→              }}
+   914→              className="bg-emerald-600 hover:bg-emerald-700"
+   915→            >
+   916→              {actionLoading && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+   917→              <ShieldCheck className="h-4 w-4 mr-1" /> অনুমোদন দিন
+   918→            </AlertDialogAction>
+   919→          </AlertDialogFooter>
+   920→        </AlertDialogContent>
+   921→      </AlertDialog>
+   922→    </div>
+   923→  );
+   924→}
+   925→
+   926→// ----------------------------------------------------------------------------
+   927→// Listings tab
+   928→// ----------------------------------------------------------------------------
+   929→
+   930→function ListingRow({
+   931→  listing,
+   932→  onAction,
+   933→}: {
+   934→  listing: AdminListing;
+   935→  onAction: (l: AdminListing, action: "unpublish" | "publish" | "verify" | "unverify" | "dismiss-report") => void;
+   936→}) {
+   937→  return (
+   938→    <Card className={cn("p-4 hover:shadow-md transition-shadow", listing.reported && "border-red-300 dark:border-red-900")}>
+   939→      <div className="flex flex-col sm:flex-row gap-4">
+   940→        <div className="h-20 w-full sm:w-28 rounded-lg overflow-hidden bg-muted shrink-0">
+   941→          {listing.image ? (
+   942→            <img src={listing.image} alt={listing.name} className="h-full w-full object-cover" />
+   943→          ) : (
+   944→            <div className="h-full w-full flex items-center justify-center">
+   945→              <Building2 className="h-6 w-6 text-muted-foreground" />
+   946→            </div>
+   947→          )}
+   948→        </div>
+   949→        <div className="flex-1 min-w-0">
+   950→          <div className="flex flex-wrap items-center gap-2">
+   951→            <span className="font-semibold truncate">{listing.name}</span>
+   952→            <MessTypeBadge type={listing.type} />
+   953→            {listing.verified && <VerifiedBadge />}
+   954→            {listing.reported && (
+   955→              <Badge variant="destructive">
+   956→                <Flag className="h-3 w-3 mr-1" /> রিপোর্টেড
+   957→              </Badge>
+   958→            )}
+   959→            {!listing.published && (
+   960→              <Badge variant="secondary" className="border-0">
+   961→                <EyeOff className="h-3 w-3 mr-1" /> আনপাবলিশড
+   962→              </Badge>
+   963→            )}
+   964→          </div>
+   965→          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+   966→            <span className="flex items-center gap-1">
+   967→              <Building2 className="h-3 w-3" /> {listing.area}
+   968→            </span>
+   969→            <span>মালিক: {listing.ownerName}</span>
+   970→            <span>{formatTaka(listing.rentFrom)} থেকে</span>
+   971→            <span>{bn(listing.availableSeats)}/{bn(listing.totalSeats)} সিট ফাঁকা</span>
+   972→          </div>
+   973→          {listing.reported && listing.reportReason && (
+   974→            <div className="mt-2 rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 p-2 text-xs text-red-700 dark:text-red-300">
+   975→              <span className="font-semibold">রিপোর্টের কারণ: </span>
+   976→              {listing.reportReason}
+   977→            </div>
+   978→          )}
+   979→        </div>
+   980→        <div className="flex flex-wrap gap-1.5 shrink-0">
+   981→          {listing.reported && (
+   982→            <Button size="sm" variant="outline" onClick={() => onAction(listing, "dismiss-report")}>
+   983→              <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> রিপোর্ট খারিজ
+   984→            </Button>
+   985→          )}
+   986→          {listing.published ? (
+   987→            <Button size="sm" variant="outline" onClick={() => onAction(listing, "unpublish")}>
+   988→              <EyeOff className="h-3.5 w-3.5 mr-1" /> আনপাবলিশ
+   989→            </Button>
+   990→          ) : (
+   991→            <Button size="sm" variant="outline" onClick={() => onAction(listing, "publish")}>
+   992→              <Eye className="h-3.5 w-3.5 mr-1" /> পাবলিশ
+   993→            </Button>
+   994→          )}
+   995→          {listing.verified ? (
+   996→            <Button size="sm" variant="outline" onClick={() => onAction(listing, "unverify")}>
+   997→              <BadgeX className="h-3.5 w-3.5 mr-1" /> আনভেরিফাই
+   998→            </Button>
+   999→          ) : (
+  1000→            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => onAction(listing, "verify")}>
+  1001→              <BadgeCheck className="h-3.5 w-3.5 mr-1" /> ভেরিফাই
+  1002→            </Button>
+  1003→          )}
+  1004→        </div>
+  1005→      </div>
+  1006→    </Card>
+  1007→  );
+  1008→}
+  1009→
+  1010→function ListingsTab() {
+  1011→  const [tab, setTab] = useState<"reported" | "all">("reported");
+  1012→  const [reported, setReported] = useState<AdminListing[]>([]);
+  1013→  const [all, setAll] = useState<AdminListing[]>([]);
+  1014→  const [loading, setLoading] = useState(true);
+  1015→  const [search, setSearch] = useState("");
+  1016→  const [actionLoading, setActionLoading] = useState(false);
+  1017→
+  1018→  const load = useCallback(async () => {
+  1019→    try {
+  1020→      const [r, a] = await Promise.all([
+  1021→        fetch("/api/admin/listings?reported=true").then((res) => res.json()),
+  1022→        fetch("/api/admin/listings").then((res) => res.json()),
+  1023→      ]);
+  1024→      setReported(r.listings ?? []);
+  1025→      setAll(a.listings ?? []);
+  1026→    } catch {
+  1027→      toast.error("লিস্টিং লোড ব্যর্থ");
+  1028→    } finally {
+  1029→      setLoading(false);
+  1030→    }
+  1031→  }, []);
+  1032→
+  1033→  useEffect(() => {
+  1034→    load();
+  1035→  }, [load]);
+  1036→
+  1037→  const onAction = async (
+  1038→    l: AdminListing,
+  1039→    action: "unpublish" | "publish" | "verify" | "unverify" | "dismiss-report"
+  1040→  ) => {
+  1041→    setActionLoading(true);
+  1042→    try {
+  1043→      const res = await fetch("/api/admin/listings", {
+  1044→        method: "PATCH",
+  1045→        headers: { "Content-Type": "application/json" },
+  1046→        body: JSON.stringify({ messId: l.id, action }),
+  1047→      });
+  1048→      if (!res.ok) throw new Error("অ্যাকশন ব্যর্থ");
+  1049→      const labelMap: Record<string, string> = {
+  1050→        unpublish: "আনপাবলিশ করা হয়েছে",
+  1051→        publish: "পাবলিশ করা হয়েছে",
+  1052→        verify: "ভেরিফাই করা হয়েছে",
+  1053→        unverify: "আনভেরিফাই করা হয়েছে",
+  1054→        "dismiss-report": "রিপোর্ট খারিজ করা হয়েছে",
+  1055→      };
+  1056→      toast.success(`${l.name} — ${labelMap[action]}`);
+  1057→      await load();
+  1058→    } catch (e) {
+  1059→      toast.error(e instanceof Error ? e.message : "অ্যাকশন ব্যর্থ");
+  1060→    } finally {
+  1061→      setActionLoading(false);
+  1062→    }
+  1063→  };
+  1064→
+  1065→  const filteredAll = useMemo(() => {
+  1066→    const q = search.trim().toLowerCase();
+  1067→    if (!q) return all;
+  1068→    return all.filter(
+  1069→      (l) =>
+  1070→        l.name.toLowerCase().includes(q) ||
+  1071→        l.area.toLowerCase().includes(q) ||
+  1072→        l.ownerName.toLowerCase().includes(q)
+  1073→    );
+  1074→  }, [all, search]);
+  1075→
+  1076→  return (
+  1077→    <div className="space-y-5">
+  1078→      <Tabs value={tab} onValueChange={(v) => setTab(v as "reported" | "all")}>
+  1079→        <TabsList>
+  1080→          <TabsTrigger value="reported" className="gap-1.5">
+  1081→            <Flag className="h-3.5 w-3.5" />
+  1082→            রিপোর্টেড লিস্টিং
+  1083→            {reported.length > 0 && (
+  1084→              <Badge variant="destructive" className="ml-1 px-1.5 py-0 text-[10px]">
+  1085→                {bn(reported.length)}
+  1086→              </Badge>
+  1087→            )}
+  1088→          </TabsTrigger>
+  1089→          <TabsTrigger value="all">সব লিস্টিং ({bn(all.length)})</TabsTrigger>
+  1090→        </TabsList>
+  1091→
+  1092→        <TabsContent value="reported" className="mt-4">
+  1093→          {loading ? (
+  1094→            <RowSkeleton />
+  1095→          ) : reported.length === 0 ? (
+  1096→            <Card className="p-10 text-center">
+  1097→              <CheckCircle2 className="h-10 w-10 mx-auto text-emerald-500 mb-2" />
+  1098→              <p className="font-semibold">কোনো রিপোর্টেড লিস্টিং নেই</p>
+  1099→              <p className="text-sm text-muted-foreground">সব মেস পরিষ্কার আছে।</p>
+  1100→            </Card>
+  1101→          ) : (
+  1102→            <div className="space-y-3">
+  1103→              {reported.map((l) => (
+  1104→                <ListingRow key={l.id} listing={l} onAction={onAction} />
+  1105→              ))}
+  1106→            </div>
+  1107→          )}
+  1108→        </TabsContent>
+  1109→
+  1110→        <TabsContent value="all" className="mt-4 space-y-4">
+  1111→          <div className="relative">
+  1112→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1113→            <Input
+  1114→              value={search}
+  1115→              onChange={(e) => setSearch(e.target.value)}
+  1116→              placeholder="মেসের নাম, এলাকা বা মালিকের নাম দিয়ে খুঁজুন…"
+  1117→              className="pl-9"
+  1118→            />
+  1119→          </div>
+  1120→          {loading ? (
+  1121→            <RowSkeleton />
+  1122→          ) : filteredAll.length === 0 ? (
+  1123→            <Card className="p-10 text-center text-sm text-muted-foreground">
+  1124→              কোনো লিস্টিং পাওয়া যায়নি
+  1125→            </Card>
+  1126→          ) : (
+  1127→            <div className="space-y-3 max-h-[calc(100vh-22rem)] overflow-y-auto pr-1">
+  1128→              {filteredAll.map((l) => (
+  1129→                <ListingRow key={l.id} listing={l} onAction={onAction} />
+  1130→              ))}
+  1131→            </div>
+  1132→          )}
+  1133→        </TabsContent>
+  1134→      </Tabs>
+  1135→
+  1136→      {actionLoading && (
+  1137→        <div className="fixed bottom-4 right-4 z-50 rounded-full bg-primary text-primary-foreground px-4 py-2 text-sm shadow-lg flex items-center gap-2">
+  1138→          <Loader2 className="h-4 w-4 animate-spin" /> প্রসেসিং…
+  1139→        </div>
+  1140→      )}
+  1141→    </div>
+  1142→  );
+  1143→}
+  1144→
+  1145→// ----------------------------------------------------------------------------
+  1146→// Users tab
+  1147→// ----------------------------------------------------------------------------
+  1148→
+  1149→function UsersTab() {
+  1150→  const [users, setUsers] = useState<AdminUser[]>([]);
+  1151→  const [loading, setLoading] = useState(true);
+  1152→  const [search, setSearch] = useState("");
+  1153→  const [actionLoading, setActionLoading] = useState(false);
+  1154→
+  1155→  const [reasonOpen, setReasonOpen] = useState(false);
+  1156→  const [reasonUser, setReasonUser] = useState<AdminUser | null>(null);
+  1157→
+  1158→  const load = useCallback(() => {
+  1159→    fetch("/api/admin/users")
+  1160→      .then((r) => r.json())
+  1161→      .then((d) => setUsers(d.users ?? []))
+  1162→      .catch(() => toast.error("ইউজার লোড ব্যর্থ"))
+  1163→      .finally(() => setLoading(false));
+  1164→  }, []);
+  1165→
+  1166→  useEffect(() => {
+  1167→    load();
+  1168→  }, [load]);
+  1169→
+  1170→  const doBlock = async (u: AdminUser, action: "block" | "unblock", reason?: string) => {
+  1171→    setActionLoading(true);
+  1172→    try {
+  1173→      const res = await fetch("/api/admin/users", {
+  1174→        method: "PATCH",
+  1175→        headers: { "Content-Type": "application/json" },
+  1176→        body: JSON.stringify({ userId: u.id, action, reason }),
+  1177→      });
+  1178→      if (!res.ok) throw new Error("অ্যাকশন ব্যর্থ");
+  1179→      toast.success(
+  1180→        action === "block" ? `${u.name} ব্লক করা হয়েছে` : `${u.name} আনব্লক করা হয়েছে`
+  1181→      );
+  1182→      await load();
+  1183→    } catch (e) {
+  1184→      toast.error(e instanceof Error ? e.message : "অ্যাকশন ব্যর্থ");
+  1185→    } finally {
+  1186→      setActionLoading(false);
+  1187→      setReasonOpen(false);
+  1188→    }
+  1189→  };
+  1190→
+  1191→  const filtered = useMemo(() => {
+  1192→    const q = search.trim().toLowerCase();
+  1193→    if (!q) return users;
+  1194→    return users.filter(
+  1195→      (u) =>
+  1196→        u.name.toLowerCase().includes(q) ||
+  1197→        u.phone.includes(q) ||
+  1198→        (u.email ?? "").toLowerCase().includes(q)
+  1199→    );
+  1200→  }, [users, search]);
+  1201→
+  1202→  return (
+  1203→    <div className="space-y-4">
+  1204→      <div className="relative">
+  1205→        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1206→        <Input
+  1207→          value={search}
+  1208→          onChange={(e) => setSearch(e.target.value)}
+  1209→          placeholder="নাম, ফোন বা ইমেইল দিয়ে খুঁজুন…"
+  1210→          className="pl-9"
+  1211→        />
+  1212→      </div>
+  1213→
+  1214→      {loading ? (
+  1215→        <RowSkeleton />
+  1216→      ) : filtered.length === 0 ? (
+  1217→        <Card className="p-10 text-center text-sm text-muted-foreground">
+  1218→          কোনো সিকার ইউজার পাওয়া যায়নি
+  1219→        </Card>
+  1220→      ) : (
+  1221→        <>
+  1222→          {/* Desktop table */}
+  1223→          <Card className="hidden md:block p-0 overflow-hidden">
+  1224→            <Table>
+  1225→              <TableHeader>
+  1226→                <TableRow>
+  1227→                  <TableHead>নাম</TableHead>
+  1228→                  <TableHead>ফোন</TableHead>
+  1229→                  <TableHead className="text-center">বুকিং</TableHead>
+  1230→                  <TableHead>স্ট্যাটাস</TableHead>
+  1231→                  <TableHead>যোগ দিয়েছেন</TableHead>
+  1232→                  <TableHead className="text-right">অ্যাকশন</TableHead>
+  1233→                </TableRow>
+  1234→              </TableHeader>
+  1235→              <TableBody>
+  1236→                {filtered.map((u) => (
+  1237→                  <TableRow key={u.id}>
+  1238→                    <TableCell>
+  1239→                      <div className="flex items-center gap-2">
+  1240→                        <Avatar className="h-8 w-8">
+  1241→                          <AvatarImage src={u.avatar ?? undefined} />
+  1242→                          <AvatarFallback className="bg-primary/10 text-primary text-xs">
+  1243→                            {u.name.slice(0, 1)}
+  1244→                          </AvatarFallback>
+  1245→                        </Avatar>
+  1246→                        <div>
+  1247→                          <div className="font-medium">{u.name}</div>
+  1248→                          {u.email && (
+  1249→                            <div className="text-xs text-muted-foreground">{u.email}</div>
+  1250→                          )}
+  1251→                        </div>
+  1252→                      </div>
+  1253→                    </TableCell>
+  1254→                    <TableCell className="font-mono text-xs">{u.phone}</TableCell>
+  1255→                    <TableCell className="text-center">
+  1256→                      <Badge variant="secondary" className="border-0">
+  1257→                        {bn(u.bookingCount)}
+  1258→                      </Badge>
+  1259→                    </TableCell>
+  1260→                    <TableCell>{statusBadge(u.status)}</TableCell>
+  1261→                    <TableCell className="text-xs text-muted-foreground">
+  1262→                      {timeAgo(u.createdAt)}
+  1263→                    </TableCell>
+  1264→                    <TableCell className="text-right">
+  1265→                      {u.status === "SUSPENDED" ? (
+  1266→                        <Button
+  1267→                          size="sm"
+  1268→                          variant="outline"
+  1269→                          disabled={actionLoading}
+  1270→                          onClick={() => doBlock(u, "unblock")}
+  1271→                        >
+  1272→                          <RotateCcw className="h-3.5 w-3.5 mr-1" /> আনব্লক
+  1273→                        </Button>
+  1274→                      ) : (
+  1275→                        <Button
+  1276→                          size="sm"
+  1277→                          variant="destructive"
+  1278→                          disabled={actionLoading}
+  1279→                          onClick={() => {
+  1280→                            setReasonUser(u);
+  1281→                            setReasonOpen(true);
+  1282→                          }}
+  1283→                        >
+  1284→                          <Ban className="h-3.5 w-3.5 mr-1" /> ব্লক
+  1285→                        </Button>
+  1286→                      )}
+  1287→                    </TableCell>
+  1288→                  </TableRow>
+  1289→                ))}
+  1290→              </TableBody>
+  1291→            </Table>
+  1292→          </Card>
+  1293→
+  1294→          {/* Mobile cards */}
+  1295→          <div className="md:hidden space-y-3">
+  1296→            {filtered.map((u) => (
+  1297→              <Card key={u.id} className="p-4">
+  1298→                <div className="flex items-start gap-3">
+  1299→                  <Avatar className="h-10 w-10 shrink-0">
+  1300→                    <AvatarImage src={u.avatar ?? undefined} />
+  1301→                    <AvatarFallback className="bg-primary/10 text-primary text-xs">
+  1302→                      {u.name.slice(0, 1)}
+  1303→                    </AvatarFallback>
+  1304→                  </Avatar>
+  1305→                  <div className="flex-1 min-w-0">
+  1306→                    <div className="flex items-center gap-2">
+  1307→                      <span className="font-semibold truncate">{u.name}</span>
+  1308→                      {statusBadge(u.status)}
+  1309→                    </div>
+  1310→                    <div className="mt-0.5 text-xs text-muted-foreground font-mono">{u.phone}</div>
+  1311→                    {u.email && (
+  1312→                      <div className="text-xs text-muted-foreground truncate">{u.email}</div>
+  1313→                    )}
+  1314→                    <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+  1315→                      <span>বুকিং: <b className="text-foreground">{bn(u.bookingCount)}</b></span>
+  1316→                      <span>{timeAgo(u.createdAt)}</span>
+  1317→                    </div>
+  1318→                  </div>
+  1319→                </div>
+  1320→                <div className="mt-3 flex justify-end">
+  1321→                  {u.status === "SUSPENDED" ? (
+  1322→                    <Button
+  1323→                      size="sm"
+  1324→                      variant="outline"
+  1325→                      disabled={actionLoading}
+  1326→                      onClick={() => doBlock(u, "unblock")}
+  1327→                    >
+  1328→                      <RotateCcw className="h-3.5 w-3.5 mr-1" /> আনব্লক
+  1329→                    </Button>
+  1330→                  ) : (
+  1331→                    <Button
+  1332→                      size="sm"
+  1333→                      variant="destructive"
+  1334→                      disabled={actionLoading}
+  1335→                      onClick={() => {
+  1336→                        setReasonUser(u);
+  1337→                        setReasonOpen(true);
+  1338→                      }}
+  1339→                    >
+  1340→                      <Ban className="h-3.5 w-3.5 mr-1" /> ব্লক করুন
+  1341→                    </Button>
+  1342→                  )}
+  1343→                </div>
+  1344→              </Card>
+  1345→            ))}
+  1346→          </div>
+  1347→        </>
+  1348→      )}
+  1349→
+  1350→      <ReasonDialog
+  1351→        open={reasonOpen}
+  1352→        onOpenChange={(v) => {
+  1353→          setReasonOpen(v);
+  1354→          if (!v) setReasonUser(null);
+  1355→        }}
+  1356→        title="ইউজার ব্লক করুন"
+  1357→        description={
+  1358→          reasonUser
+  1359→            ? `${reasonUser.name} কে ব্লক করতে চান? ব্লক হলে তিনি লগইন করতে পারবেন না।`
+  1360→            : ""
+  1361→        }
+  1362→        confirmLabel="ব্লক করুন"
+  1363→        loading={actionLoading}
+  1364→        onConfirm={(reason) => {
+  1365→          if (reasonUser) doBlock(reasonUser, "block", reason);
+  1366→        }}
+  1367→      />
+  1368→    </div>
+  1369→  );
+  1370→}
+  1371→
+  1372→// ----------------------------------------------------------------------------
+  1373→// Reports tab (mock ticket system)
+  1374→// ----------------------------------------------------------------------------
+  1375→
+  1376→interface ReportTicket {
+  1377→  id: string;
+  1378→  ref: string;
+  1379→  type: "ফ্রড" | "ভুল তথ্য" | "হয়রানি" | "পেমেন্ট" | "অন্যান্য";
+  1380→  subject: string;
+  1381→  reporter: string;
+  1382→  against: string;
+  1383→  status: "OPEN" | "IN_REVIEW" | "RESOLVED";
+  1384→  priority: "LOW" | "MEDIUM" | "HIGH";
+  1385→  createdAt: string;
+  1386→  description: string;
+  1387→}
+  1388→
+  1389→const SAMPLE_TICKETS: ReportTicket[] = [
+  1390→  {
+  1391→    id: "t1",
+  1392→    ref: "TIC-1001",
+  1393→    type: "ফ্রড",
+  1394→    subject: "মেসের ছবি ও বাস্তব অবস্থার মিল নেই",
+  1395→    reporter: "রাকিব হাসান",
+  1396→    against: "মিরপুর ১২ — আদর্শ মেস",
+  1397→    status: "OPEN",
+  1398→    priority: "HIGH",
+  1399→    createdAt: new Date(Date.now() - 2 * 3600000).toISOString(),
+  1400→    description: "লিস্টিংয়ে দেখানো ছবিতে এসি ও নতুন বাথরুম দেখানো হয়েছে, কিন্তু বাস্তবে তা নেই।",
+  1401→  },
+  1402→  {
+  1403→    id: "t2",
+  1404→    ref: "TIC-1002",
+  1405→    type: "হয়রানি",
+  1406→    subject: "মালিক অতিরিক্ত টাকা দাবি করছেন",
+  1407→    reporter: "সাব্বির আহমেদ",
+  1408→    against: "মালিক: জাকির হোসেন",
+  1409→    status: "IN_REVIEW",
+  1410→    priority: "HIGH",
+  1411→    createdAt: new Date(Date.now() - 6 * 3600000).toISOString(),
+  1412→    description: "চুক্তির বাইরে গিয়ে ২০০০ টাকা বিল দাবি করা হচ্ছে, না দিলে সিট ছাড়তে বলা হচ্ছে।",
+  1413→  },
+  1414→  {
+  1415→    id: "t3",
+  1416→    ref: "TIC-1003",
+  1417→    type: "ভুল তথ্য",
+  1418→    subject: "ফাঁকা সিট দেখাচ্ছে কিন্তু বাস্তবে নেই",
+  1419→    reporter: "তানভীর আলম",
+  1420→    against: "ধানমন্ডি — সিটি হোস্টেল",
+  1421→    status: "OPEN",
+  1422→    priority: "MEDIUM",
+  1423→    createdAt: new Date(Date.now() - 18 * 3600000).toISOString(),
+  1424→    description: "অ্যাপে ৩টি ফাঁকা সিট দেখাচ্ছে, কিন্তু মালিক বলছেন সব বুকড।",
+  1425→  },
+  1426→  {
+  1427→    id: "t4",
+  1428→    ref: "TIC-1004",
+  1429→    type: "পেমেন্ট",
+  1430→    subject: "বুকিং কনফার্ম হলেও টাকা ফেরত পাচ্ছি না",
+  1431→    reporter: "নাহিদ রহমান",
+  1432→    against: "মালিক: ফারুক মিয়া",
+  1433→    status: "RESOLVED",
+  1434→    priority: "MEDIUM",
+  1435→    createdAt: new Date(Date.now() - 3 * 86400000).toISOString(),
+  1436→    description: "মালিক রিজেক্ট করেছেন কিন্তু ৫০০০ টাকা অগ্রিম ফেরত পাচ্ছি না।",
+  1437→  },
+  1438→  {
+  1439→    id: "t5",
+  1440→    ref: "TIC-1005",
+  1441→    type: "অন্যান্য",
+  1442→    subject: "মেসের আশেপাশে নিরাপত্তা সমস্যা",
+  1443→    reporter: "ইমরান খান",
+  1444→    against: "মোহাম্মদপুর — আল-মদিনা মেস",
+  1445→    status: "RESOLVED",
+  1446→    priority: "LOW",
+  1447→    createdAt: new Date(Date.now() - 5 * 86400000).toISOString(),
+  1448→    description: "রাতে আশপাশে চুরির ঘটনা ঘটছে, সিসিটিভি নেই।",
+  1449→  },
+  1450→  {
+  1451→    id: "t6",
+  1452→    ref: "TIC-1006",
+  1453→    type: "ফ্রড",
+  1454→    subject: "একই মেস দুইবার লিস্ট করা হয়েছে",
+  1455→    reporter: "অটো ডিটেকশন",
+  1456→    against: "উত্তরা — গ্রিন ভিউ মেস",
+  1457→    status: "IN_REVIEW",
+  1458→    priority: "HIGH",
+  1459→    createdAt: new Date(Date.now() - 12 * 3600000).toISOString(),
+  1460→    description: "সিস্টেম সম্ভাব্য ডুপ্লিকেট লিস্টিং সনাক্ত করেছে। ম্যানুয়াল যাচাই প্রয়োজন।",
+  1461→  },
+  1462→];
+  1463→
+  1464→const TICKET_STATUS_CONFIG: Record<ReportTicket["status"], { label: string; cls: string }> = {
+  1465→  OPEN: { label: "খোলা", cls: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300" },
+  1466→  IN_REVIEW: { label: "পর্যালোচনায়", cls: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" },
+  1467→  RESOLVED: { label: "সমাধান হয়েছে", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" },
+  1468→};
+  1469→
+  1470→const PRIORITY_CONFIG: Record<ReportTicket["priority"], { label: string; cls: string }> = {
+  1471→  LOW: { label: "কম", cls: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" },
+  1472→  MEDIUM: { label: "মাঝারি", cls: "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300" },
+  1473→  HIGH: { label: "উচ্চ", cls: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300" },
+  1474→};
+  1475→
+  1476→function ReportsTab() {
+  1477→  const [tickets, setTickets] = useState<ReportTicket[]>(SAMPLE_TICKETS);
+  1478→  const [filter, setFilter] = useState<"ALL" | ReportTicket["status"]>("ALL");
+  1479→
+  1480→  const counts = useMemo(() => {
+  1481→    return {
+  1482→      open: tickets.filter((t) => t.status === "OPEN").length,
+  1483→      review: tickets.filter((t) => t.status === "IN_REVIEW").length,
+  1484→      resolved: tickets.filter((t) => t.status === "RESOLVED").length,
+  1485→    };
+  1486→  }, [tickets]);
+  1487→
+  1488→  const filtered = filter === "ALL" ? tickets : tickets.filter((t) => t.status === filter);
+  1489→
+  1490→  const updateStatus = (id: string, status: ReportTicket["status"]) => {
+  1491→    setTickets((prev) => prev.map((t) => (t.id === id ? { ...t, status } : t)));
+  1492→    const labelMap: Record<ReportTicket["status"], string> = {
+  1493→      OPEN: "খোলা",
+  1494→      IN_REVIEW: "পর্যালোচনায়",
+  1495→      RESOLVED: "সমাধান হয়েছে",
+  1496→    };
+  1497→    toast.success(`টিকেট ${labelMap[status]} হিসেবে চিহ্নিত করা হয়েছে`);
+  1498→  };
+  1499→
+  1500→  return (
+  1501→    <div className="space-y-5">
+  1502→      {/* KPI */}
+  1503→      <div className="grid grid-cols-3 gap-3">
+  1504→        <Card className="p-4">
+  1505→          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+  1506→            <AlertTriangle className="h-3.5 w-3.5 text-red-500" /> খোলা
+  1507→          </div>
+  1508→          <div className="mt-1 text-2xl font-bold">{bn(counts.open)}</div>
+  1509→        </Card>
+  1510→        <Card className="p-4">
+  1511→          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+  1512→            <Clock className="h-3.5 w-3.5 text-amber-500" /> পর্যালোচনায়
+  1513→          </div>
+  1514→          <div className="mt-1 text-2xl font-bold">{bn(counts.review)}</div>
+  1515→        </Card>
+  1516→        <Card className="p-4">
+  1517→          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+  1518→            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> সমাধান হয়েছে
+  1519→          </div>
+  1520→          <div className="mt-1 text-2xl font-bold">{bn(counts.resolved)}</div>
+  1521→        </Card>
+  1522→      </div>
+  1523→
+  1524→      <div className="flex flex-wrap gap-2">
+  1525→        {(["ALL", "OPEN", "IN_REVIEW", "RESOLVED"] as const).map((s) => (
+  1526→          <Button
+  1527→            key={s}
+  1528→            size="sm"
+  1529→            variant={filter === s ? "default" : "outline"}
+  1530→            onClick={() => setFilter(s)}
+  1531→          >
+  1532→            {s === "ALL" ? "সব" : TICKET_STATUS_CONFIG[s].label}
+  1533→          </Button>
+  1534→        ))}
+  1535→      </div>
+  1536→
+  1537→      <div className="space-y-3">
+  1538→        {filtered.map((t) => (
+  1539→          <Card key={t.id} className="p-4 hover:shadow-md transition-shadow">
+  1540→            <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+  1541→              <div className="flex-1 min-w-0">
+  1542→                <div className="flex flex-wrap items-center gap-2">
+  1543→                  <span className="font-mono text-xs text-muted-foreground">{t.ref}</span>
+  1544→                  <Badge className={cn("border-0", PRIORITY_CONFIG[t.priority].cls)}>
+  1545→                    {PRIORITY_CONFIG[t.priority].label} অগ্রাধিকার
+  1546→                  </Badge>
+  1547→                  <Badge variant="secondary" className="border-0">
+  1548→                    {t.type}
+  1549→                  </Badge>
+  1550→                  <Badge className={cn("border-0", TICKET_STATUS_CONFIG[t.status].cls)}>
+  1551→                    {TICKET_STATUS_CONFIG[t.status].label}
+  1552→                  </Badge>
+  1553→                </div>
+  1554→                <h3 className="mt-1.5 font-semibold">{t.subject}</h3>
+  1555→                <p className="mt-1 text-sm text-muted-foreground">{t.description}</p>
+  1556→                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+  1557→                  <span>রিপোর্টকারী: <b className="text-foreground">{t.reporter}</b></span>
+  1558→                  <span>বিষয়: <b className="text-foreground">{t.against}</b></span>
+  1559→                  <span>{timeAgo(t.createdAt)}</span>
+  1560→                </div>
+  1561→              </div>
+  1562→              <div className="flex flex-wrap gap-2 shrink-0">
+  1563→                {t.status !== "IN_REVIEW" && (
+  1564→                  <Button size="sm" variant="outline" onClick={() => updateStatus(t.id, "IN_REVIEW")}>
+  1565→                    <Clock className="h-3.5 w-3.5 mr-1" /> রিভিউতে
+  1566→                  </Button>
+  1567→                )}
+  1568→                {t.status !== "RESOLVED" && (
+  1569→                  <Button
+  1570→                    size="sm"
+  1571→                    className="bg-emerald-600 hover:bg-emerald-700"
+  1572→                    onClick={() => updateStatus(t.id, "RESOLVED")}
+  1573→                  >
+  1574→                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> সমাধান
+  1575→                  </Button>
+  1576→                )}
+  1577→                {t.status !== "OPEN" && (
+  1578→                  <Button size="sm" variant="ghost" onClick={() => updateStatus(t.id, "OPEN")}>
+  1579→                    <AlertTriangle className="h-3.5 w-3.5 mr-1" /> পুনরায় খুলুন
+  1580→                  </Button>
+  1581→                )}
+  1582→              </div>
+  1583→            </div>
+  1584→          </Card>
+  1585→        ))}
+  1586→      </div>
+  1587→    </div>
+  1588→  );
+  1589→}
+  1590→
+  1591→// ----------------------------------------------------------------------------
+  1592→// Config tab (mock)
+  1593→// ----------------------------------------------------------------------------
+  1594→
+  1595→interface FeaturedMess {
+  1596→  id: string;
+  1597→  name: string;
+  1598→  area: string;
+  1599→  rating: number;
+  1600→}
+  1601→
+  1602→function ConfigTab() {
+  1603→  const [featuredList, setFeaturedList] = useState<FeaturedMess[]>([]);
+  1604→  const [loading, setLoading] = useState(true);
+  1605→  const [commission, setCommission] = useState(5);
+  1606→  const [banners, setBanners] = useState([
+  1607→    { id: "b1", title: "নতুন বছর অফার", active: true, clicks: 1240 },
+  1608→    { id: "b2", title: "ঢাকা বিশ্ববিদ্যালয় এলাকা", active: false, clicks: 890 },
+  1609→  ]);
+  1610→  const [saving, setSaving] = useState(false);
+  1611→
+  1612→  const load = useCallback(() => {
+  1613→    fetch("/api/admin/listings")
+  1614→      .then((r) => r.json())
+  1615→      .then((d) => {
+  1616→        const list: FeaturedMess[] = (d.listings ?? []).slice(0, 20).map((l: AdminListing) => ({
+  1617→          id: l.id,
+  1618→          name: l.name,
+  1619→          area: l.area,
+  1620→          rating: l.rating,
+  1621→        }));
+  1622→        setFeaturedList(list);
+  1623→      })
+  1624→      .catch(() => toast.error("মেস তালিকা লোড ব্যর্থ"))
+  1625→      .finally(() => setLoading(false));
+  1626→  }, []);
+  1627→
+  1628→  useEffect(() => {
+  1629→    load();
+  1630→  }, [load]);
+  1631→
+  1632→  // mock featured selection (UI only)
+  1633→  const [featuredIds, setFeaturedIds] = useState<Set<string>>(new Set());
+  1634→
+  1635→  const toggleFeatured = (id: string) => {
+  1636→    setFeaturedIds((prev) => {
+  1637→      const next = new Set(prev);
+  1638→      if (next.has(id)) next.delete(id);
+  1639→      else next.add(id);
+  1640→      return next;
+  1641→    });
+  1642→  };
+  1643→
+  1644→  const toggleBanner = (id: string) => {
+  1645→    setBanners((prev) =>
+  1646→      prev.map((b) => (b.id === id ? { ...b, active: !b.active } : b))
+  1647→    );
+  1648→  };
+  1649→
+  1650→  const save = () => {
+  1651→    setSaving(true);
+  1652→    setTimeout(() => {
+  1653→      setSaving(false);
+  1654→      toast.success("সংরক্ষিত হয়েছে");
+  1655→    }, 700);
+  1656→  };
+  1657→
+  1658→  return (
+  1659→    <div className="space-y-5">
+  1660→      {/* Featured mess selection */}
+  1661→      <Card>
+  1662→        <CardHeader>
+  1663→          <CardTitle className="flex items-center gap-2 text-base">
+  1664→            <BadgeCheck className="h-4 w-4 text-primary" /> ফিচার্ড মেস নির্বাচন
+  1665→          </CardTitle>
+  1666→          <CardDescription>হোমপেজে দেখানোর জন্য মেস নির্বাচন করুন ({bn(featuredIds.size)} টি নির্বাচিত)</CardDescription>
+  1667→        </CardHeader>
+  1668→        <CardContent>
+  1669→          {loading ? (
+  1670→            <RowSkeleton rows={4} />
+  1671→          ) : (
+  1672→            <ScrollArea className="max-h-80">
+  1673→              <div className="space-y-2 pr-2">
+  1674→                {featuredList.map((m) => (
+  1675→                  <label
+  1676→                    key={m.id}
+  1677→                    className={cn(
+  1678→                      "flex items-center gap-3 rounded-lg border p-2.5 cursor-pointer transition-colors hover:bg-accent",
+  1679→                      featuredIds.has(m.id) && "border-primary bg-primary/5"
+  1680→                    )}
+  1681→                  >
+  1682→                    <Checkbox
+  1683→                      checked={featuredIds.has(m.id)}
+  1684→                      onCheckedChange={() => toggleFeatured(m.id)}
+  1685→                    />
+  1686→                    <div className="flex-1 min-w-0">
+  1687→                      <div className="text-sm font-medium truncate">{m.name}</div>
+  1688→                      <div className="text-xs text-muted-foreground">{m.area} • ⭐ {m.rating.toFixed(1)}</div>
+  1689→                    </div>
+  1690→                    {featuredIds.has(m.id) && (
+  1691→                      <Badge className="bg-primary/10 text-primary border-0">ফিচার্ড</Badge>
+  1692→                    )}
+  1693→                  </label>
+  1694→                ))}
+  1695→              </div>
+  1696→            </ScrollArea>
+  1697→          )}
+  1698→        </CardContent>
+  1699→      </Card>
+  1700→
+  1701→      {/* Commission */}
+  1702→      <Card>
+  1703→        <CardHeader>
+  1704→          <CardTitle className="flex items-center gap-2 text-base">
+  1705→            <Percent className="h-4 w-4 text-primary" /> কমিশন রেট
+  1706→          </CardTitle>
+  1707→          <CardDescription>প্রতিটি সফল বুকিং থেকে প্ল্যাটফর্মের কমিশন</CardDescription>
+  1708→        </CardHeader>
+  1709→        <CardContent className="space-y-3">
+  1710→          <div className="flex items-center gap-3">
+  1711→            <Input
+  1712→              type="number"
+  1713→              min={0}
+  1714→              max={20}
+  1715→              step={0.5}
+  1716→              value={commission}
+  1717→              onChange={(e) => setCommission(Number(e.target.value))}
+  1718→              className="w-28"
+  1719→            />
+  1720→            <span className="text-lg font-semibold">%</span>
+  1721→            <span className="text-sm text-muted-foreground">
+  1722→              = ৳{bn(Math.round(commission * 100))} প্রতি ৳১০,০০০ বুকিংয়ে
+  1723→            </span>
+  1724→          </div>
+  1725→          <input
+  1726→            type="range"
+  1727→            min={0}
+  1728→            max={15}
+  1729→            step={0.5}
+  1730→            value={commission}
+  1731→            onChange={(e) => setCommission(Number(e.target.value))}
+  1732→            className="w-full accent-primary"
+  1733→          />
+  1734→        </CardContent>
+  1735→      </Card>
+  1736→
+  1737→      {/* Banners */}
+  1738→      <Card>
+  1739→        <CardHeader>
+  1740→          <CardTitle className="flex items-center gap-2 text-base">
+  1741→            <Megaphone className="h-4 w-4 text-primary" /> ব্যানার ও প্রমোশন
+  1742→          </CardTitle>
+  1743→          <CardDescription>হোমপেজ ও সার্চ পেজের প্রমোশনাল ব্যানার</CardDescription>
+  1744→        </CardHeader>
+  1745→        <CardContent className="space-y-3">
+  1746→          {banners.map((b) => (
+  1747→            <div
+  1748→              key={b.id}
+  1749→              className="flex items-center justify-between gap-3 rounded-lg border p-3"
+  1750→            >
+  1751→              <div className="flex items-center gap-3 min-w-0">
+  1752→                <div
+  1753→                  className={cn(
+  1754→                    "flex h-9 w-9 items-center justify-center rounded-lg",
+  1755→                    b.active
+  1756→                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+  1757→                      : "bg-muted text-muted-foreground"
+  1758→                  )}
+  1759→                >
+  1760→                  <Megaphone className="h-4 w-4" />
+  1761→                </div>
+  1762→                <div className="min-w-0">
+  1763→                  <div className="text-sm font-medium truncate">{b.title}</div>
+  1764→                  <div className="text-xs text-muted-foreground">
+  1765→                    {bn(b.clicks)} ক্লিক • {b.active ? "চালু" : "বন্ধ"}
+  1766→                  </div>
+  1767→                </div>
+  1768→              </div>
+  1769→              <Button
+  1770→                size="sm"
+  1771→                variant={b.active ? "default" : "outline"}
+  1772→                onClick={() => toggleBanner(b.id)}
+  1773→              >
+  1774→                {b.active ? "বন্ধ করুন" : "চালু করুন"}
+  1775→              </Button>
+  1776→            </div>
+  1777→          ))}
+  1778→          <Button variant="outline" size="sm" className="w-full" onClick={() => toast.info("নতুন ব্যানার তৈরির ফর্ম শীঘ্রই আসছে")}>
+  1779→            <Megaphone className="h-4 w-4 mr-1" /> নতুন ব্যানার যোগ করুন
+  1780→          </Button>
+  1781→        </CardContent>
+  1782→      </Card>
+  1783→
+  1784→      <div className="flex justify-end">
+  1785→        <Button size="lg" onClick={save} disabled={saving}>
+  1786→          {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+  1787→          সংরক্ষণ করুন
+  1788→        </Button>
+  1789→      </div>
+  1790→    </div>
+  1791→  );
+  1792→}
+  1793→
+  1794→// ----------------------------------------------------------------------------
+  1795→// Logs tab
+  1796→// ----------------------------------------------------------------------------
+  1797→
+  1798→const LOG_ACTION_CONFIG: Record<string, { label: string; cls: string; icon: typeof ShieldCheck }> = {
+  1799→  APPROVE_OWNER: { label: "মালিক অনুমোদন", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300", icon: ShieldCheck },
+  1800→  SUSPEND_OWNER: { label: "মালিক সাসপেন্ড", cls: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300", icon: Pause },
+  1801→  REMOVE_OWNER: { label: "মালিক রিমুভ", cls: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300", icon: Trash2 },
+  1802→  BLOCK_USER: { label: "ইউজার ব্লক", cls: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300", icon: Ban },
+  1803→  UNBLOCK_USER: { label: "ইউজার আনব্লক", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300", icon: RotateCcw },
+  1804→  UNPUBLISH: { label: "মেস আনপাবলিশ", cls: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300", icon: EyeOff },
+  1805→  PUBLISH: { label: "মেস পাবলিশ", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300", icon: Eye },
+  1806→  VERIFY: { label: "মেস ভেরিফাই", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300", icon: BadgeCheck },
+  1807→  UNVERIFY: { label: "মেস আনভেরিফাই", cls: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300", icon: BadgeX },
+  1808→  DISMISS_REPORT: { label: "রিপোর্ট খারিজ", cls: "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300", icon: CheckCircle2 },
+  1809→};
+  1810→
+  1811→function LogsTab() {
+  1812→  const [logs, setLogs] = useState<AdminLog[]>([]);
+  1813→  const [loading, setLoading] = useState(true);
+  1814→  const [search, setSearch] = useState("");
+  1815→
+  1816→  const load = useCallback(() => {
+  1817→    fetch("/api/admin/logs")
+  1818→      .then((r) => r.json())
+  1819→      .then((d) => setLogs(d.logs ?? []))
+  1820→      .catch(() => toast.error("লগ লোড ব্যর্থ"))
+  1821→      .finally(() => setLoading(false));
+  1822→  }, []);
+  1823→
+  1824→  useEffect(() => {
+  1825→    load();
+  1826→  }, [load]);
+  1827→
+  1828→  const filtered = useMemo(() => {
+  1829→    const q = search.trim().toLowerCase();
+  1830→    if (!q) return logs;
+  1831→    return logs.filter(
+  1832→      (l) =>
+  1833→        l.action.toLowerCase().includes(q) ||
+  1834→        l.target.toLowerCase().includes(q) ||
+  1835→        (l.reason ?? "").toLowerCase().includes(q)
+  1836→    );
+  1837→  }, [logs, search]);
+  1838→
+  1839→  return (
+  1840→    <div className="space-y-4">
+  1841→      <div className="relative">
+  1842→        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1843→        <Input
+  1844→          value={search}
+  1845→          onChange={(e) => setSearch(e.target.value)}
+  1846→          placeholder="অ্যাকশন, টার্গেট বা কারণ দিয়ে খুঁজুন…"
+  1847→          className="pl-9"
+  1848→        />
+  1849→      </div>
+  1850→
+  1851→      {loading ? (
+  1852→        <RowSkeleton rows={6} />
+  1853→      ) : filtered.length === 0 ? (
+  1854→        <Card className="p-10 text-center text-sm text-muted-foreground">
+  1855→          কোনো লগ এন্ট্রি নেই
+  1856→        </Card>
+  1857→      ) : (
+  1858→        <Card className="p-4">
+  1859→          <ol className="relative space-y-4 border-l border-border pl-4 ml-2">
+  1860→            {filtered.map((log) => {
+  1861→              const cfg = LOG_ACTION_CONFIG[log.action] ?? {
+  1862→                label: log.action,
+  1863→                cls: "bg-secondary text-secondary-foreground",
+  1864→                icon: ScrollText,
+  1865→              };
+  1866→              const Icon = cfg.icon;
+  1867→              return (
+  1868→                <li key={log.id} className="relative">
+  1869→                  <span className="absolute -left-[26px] top-1 flex h-6 w-6 items-center justify-center rounded-full bg-background border-2 border-primary/30">
+  1870→                    <Icon className="h-3 w-3 text-primary" />
+  1871→                  </span>
+  1872→                  <div className="flex flex-wrap items-center gap-2">
+  1873→                    <Badge className={cn("border-0", cfg.cls)}>{cfg.label}</Badge>
+  1874→                    <span className="text-sm font-semibold">{log.target}</span>
+  1875→                    <span className="text-xs text-muted-foreground">{timeAgo(log.createdAt)}</span>
+  1876→                  </div>
+  1877→                  {log.reason && (
+  1878→                    <p className="mt-1 text-sm text-muted-foreground">
+  1879→                      <span className="font-medium">কারণ:</span> {log.reason}
+  1880→                    </p>
+  1881→                  )}
+  1882→                </li>
+  1883→              );
+  1884→            })}
+  1885→          </ol>
+  1886→        </Card>
+  1887→      )}
+  1888→    </div>
+  1889→  );
+  1890→}
+  1891→
+  1892→// ----------------------------------------------------------------------------
+  1893→// Main component
+  1894→// ----------------------------------------------------------------------------
+  1895→
+  1896→export function AdminDashboard() {
+  1897→  const user = useAppStore((s) => s.user);
+  1898→  const adminTab = useAppStore((s) => s.adminTab);
+  1899→  const setAdminTab = useAppStore((s) => s.setAdminTab);
+  1900→
+  1901→  if (!user || user.role !== "ADMIN") {
+  1902→    return <AdminGate />;
+  1903→  }
+  1904→
+  1905→  const titleMap: Record<AdminTab, { title: string; subtitle: string }> = {
+  1906→    overview: { title: "ওভারভিউ", subtitle: "সাইট-ওয়াইড মেট্রিক্স ও পরিসংখ্যান" },
+  1907→    owners: { title: "মেস মালিক ব্যবস্থাপনা", subtitle: "ভেরিফিকেশন ও মালিক নিয়ন্ত্রণ" },
+  1908→    listings: { title: "লিস্টিং মডারেশন", subtitle: "মেস পাবলিশ, ভেরিফাই ও রিপোর্ট হ্যান্ডলিং" },
+  1909→    users: { title: "সিকার ইউজার", subtitle: "ইউজার ব্যবস্থাপনা ও ব্লক/আনব্লক" },
+  1910→    reports: { title: "রিপোর্ট ও অভিযোগ", subtitle: "ইউজার রিপোর্ট টিকেট সিস্টেম" },
+  1911→    config: { title: "সাইট কনফিগারেশন", subtitle: "ফিচার্ড, কমিশন ও ব্যানার" },
+  1912→    logs: { title: "অডিট লগ", subtitle: "এডমিন অ্যাকশনের সম্পূর্ণ ইতিহাস" },
+  1913→  };
+  1914→
+  1915→  const meta = titleMap[adminTab];
+  1916→
+  1917→  return (
+  1918→    <div className="mx-auto max-w-7xl px-3 sm:px-4 py-6">
+  1919→      {/* Page header */}
+  1920→      <div className="mb-5 flex items-center gap-3">
+  1921→        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+  1922→          <Shield className="h-6 w-6" />
+  1923→        </div>
+  1924→        <div>
+  1925→          <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
+  1926→            {meta.title}
+  1927→            <Badge variant="secondary" className="border-0 bg-primary/10 text-primary">
+  1928→              এডমিন প্যানেল
+  1929→            </Badge>
+  1930→          </h1>
+  1931→          <p className="text-sm text-muted-foreground">{meta.subtitle}</p>
+  1932→        </div>
+  1933→      </div>
+  1934→
+  1935→      <div className="flex flex-col lg:flex-row gap-5">
+  1936→        {/* Sidebar (desktop) / Horizontal scroll (mobile) */}
+  1937→        <aside className="lg:w-56 shrink-0">
+  1938→          {/* Desktop vertical nav */}
+  1939→          <nav className="hidden lg:flex flex-col gap-1 sticky top-20">
+  1940→            {NAV.map((item) => {
+  1941→              const active = adminTab === item.key;
+  1942→              return (
+  1943→                <button
+  1944→                  key={item.key}
+  1945→                  onClick={() => setAdminTab(item.key)}
+  1946→                  className={cn(
+  1947→                    "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors text-left",
+  1948→                    active
+  1949→                      ? "bg-primary text-primary-foreground shadow-sm"
+  1950→                      : "hover:bg-accent text-foreground/80 hover:text-foreground"
+  1951→                  )}
+  1952→                >
+  1953→                  <item.icon className="h-4 w-4 shrink-0" />
+  1954→                  <span>{item.label}</span>
+  1955→                  {active && <ChevronRight className="h-3.5 w-3.5 ml-auto" />}
+  1956→                </button>
+  1957→              );
+  1958→            })}
+  1959→          </nav>
+  1960→
+  1961→          {/* Mobile horizontal scrollable tabs */}
+  1962→          <ScrollArea className="lg:hidden">
+  1963→            <div className="flex gap-2 pb-2 w-max">
+  1964→              {NAV.map((item) => {
+  1965→                const active = adminTab === item.key;
+  1966→                return (
+  1967→                  <button
+  1968→                    key={item.key}
+  1969→                    onClick={() => setAdminTab(item.key)}
+  1970→                    className={cn(
+  1971→                      "flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap",
+  1972→                      active
+  1973→                        ? "bg-primary text-primary-foreground"
+  1974→                        : "bg-secondary text-foreground/80"
+  1975→                    )}
+  1976→                  >
+  1977→                    <item.icon className="h-3.5 w-3.5" />
+  1978→                    {item.label}
+  1979→                  </button>
+  1980→                );
+  1981→              })}
+  1982→            </div>
+  1983→          </ScrollArea>
+  1984→        </aside>
+  1985→
+  1986→        {/* Main content */}
+  1987→        <main className="flex-1 min-w-0 animate-fade-in-up">
+  1988→          {adminTab === "overview" && <OverviewTab />}
+  1989→          {adminTab === "owners" && <OwnersTab />}
+  1990→          {adminTab === "listings" && <ListingsTab />}
+  1991→          {adminTab === "users" && <UsersTab />}
+  1992→          {adminTab === "reports" && <ReportsTab />}
+  1993→          {adminTab === "config" && <ConfigTab />}
+  1994→          {adminTab === "logs" && <LogsTab />}
+  1995→        </main>
+  1996→      </div>
+  1997→    </div>
+  1998→  );
+  1999→}
+  2000→

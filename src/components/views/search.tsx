@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
-  Search, MapPin, Navigation, List, Map as MapIcon, SlidersHorizontal, X, ChevronRight, Layers,
+  Search, MapPin, Navigation, List, Map as MapIcon, SlidersHorizontal, X, ChevronRight, Layers, Crosshair, Check,
 } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { FACILITIES, MESS_TYPE_LABELS, POPULAR_AREAS, type Filters, type MessSummary, type MessType } from "@/lib/types";
@@ -41,6 +41,7 @@ export function SearchView() {
   const [query, setQuery] = useState("");
   const [satellite, setSatellite] = useState(false);
   const [showFiltersMobile, setShowFiltersMobile] = useState(false);
+  const [pickMode, setPickMode] = useState(false);
 
   const fetchMesses = (f: Filters) => {
     setLoading(true);
@@ -90,13 +91,36 @@ export function SearchView() {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setSearchCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude, label: "আমার লোকেশন" });
-        setFilters({ useLocation: true, userLat: pos.coords.latitude, userLng: pos.coords.longitude });
-        toast.success("লোকেশন সেট হয়েছে");
+        setFilters({ useLocation: true, userLat: pos.coords.latitude, userLng: pos.coords.longitude, area: "" });
+        toast.success("আপনার ডিভাইস লোকেশন সেট হয়েছে");
       },
       () => {
-        toast.error("লোকেশন পারমিশন দেওয়া হয়নি। ম্যানুয়াল এলাকা সার্চ ব্যবহার করুন।");
+        toast.error("লোকেশন পারমিশন দেওয়া হয়নি। ম্যাপে ক্লিক করে লোকেশন বসান।");
+        setPickMode(true);
       }
     );
+  };
+
+  const onPickLocation = (lat: number, lng: number) => {
+    // find nearest known area name for the label
+    const nearest = POPULAR_AREAS.reduce(
+      (best, a) => {
+        const d = Math.hypot(a.lat - lat, a.lng - lng);
+        return d < best.d ? { ...a, d } : best;
+      },
+      { name: "কাস্টম পয়েন্ট", lat: 0, lng: 0, d: Infinity } as { name: string; lat: number; lng: number; d: number }
+    );
+    const label = nearest.d < 0.05 ? nearest.name : "কাস্টম পয়েন্ট";
+    setSearchCenter({ lat, lng, label });
+    setFilters({ useLocation: true, userLat: lat, userLng: lng, area: "" });
+    setPickMode(false);
+    toast.success(`লোকেশন সেট হয়েছে — ${label}। এখন এই পয়েন্টের আশেপাশে মেস খুঁজুন।`);
+  };
+
+  const clearLocation = () => {
+    setFilters({ useLocation: false, userLat: null, userLng: null });
+    setSearchCenter(null);
+    toast.info("লোকেশন মুছে ফেলা হয়েছে");
   };
 
   const toggleType = (t: MessType) => {
@@ -219,6 +243,23 @@ export function SearchView() {
         <Button variant="outline" size="sm" onClick={useMyLocation} className="h-9">
           <Navigation className="h-3.5 w-3.5 mr-1.5" /> আমার লোকেশন
         </Button>
+        <Button
+          variant={pickMode ? "default" : "outline"}
+          size="sm"
+          onClick={() => {
+            setPickMode(!pickMode);
+            if (!pickMode) toast.info("ম্যাপে যেকোনো জায়গায় ক্লিক করে আপনার লোকেশন বসান");
+          }}
+          className="h-9"
+        >
+          {pickMode ? <Check className="h-3.5 w-3.5 mr-1.5" /> : <Crosshair className="h-3.5 w-3.5 mr-1.5" />}
+          {pickMode ? "সেভ করুন" : "ম্যাপে বসান"}
+        </Button>
+        {filters.useLocation && (
+          <Button variant="ghost" size="sm" onClick={clearLocation} className="h-9 text-muted-foreground">
+            <X className="h-3.5 w-3.5 mr-1" /> লোকেশন মুছুন
+          </Button>
+        )}
         <div className="flex rounded-md border overflow-hidden h-9">
           <button
             onClick={() => setSatellite(false)}
@@ -278,7 +319,26 @@ export function SearchView() {
               setHoveredMessId={setHoveredMessId}
               setSelectedMapMessId={setSelectedMapMessId}
               openMess={openMess}
+              pickMode={pickMode}
+              onPickLocation={onPickLocation}
             />
+
+            {/* Pick mode banner */}
+            {pickMode && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 text-sm font-medium animate-fade-in-up">
+                <Crosshair className="h-4 w-4 animate-pulse" />
+                ম্যাপে যেকোনো জায়গায় ক্লিক করে আপনার লোকেশন বসান
+              </div>
+            )}
+
+            {/* Current location info chip */}
+            {filters.useLocation && searchCenter && !pickMode && (
+              <div className="absolute top-4 left-4 z-[1000] bg-background/95 backdrop-blur border rounded-full shadow-md px-3 py-1.5 flex items-center gap-2 text-xs">
+                <span className="flex h-2 w-2 rounded-full bg-blue-600 animate-pulse" />
+                <span className="font-medium">{searchCenter.label}</span>
+                <span className="text-muted-foreground">• {filters.radiusKm} কিমি রেডিয়াস</span>
+              </div>
+            )}
 
             {/* Floating preview card */}
             {selectedMapMessId && (

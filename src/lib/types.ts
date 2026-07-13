@@ -47,6 +47,7 @@ export type AdminTab =
 
 export type SeekerTab =
   | "bookings"
+  | "payments"
   | "favorites"
   | "messages"
   | "settings";
@@ -150,6 +151,7 @@ export interface BookingWithRelations {
   status: BookingStatus;
   moveInDate: string;
   duration: string;
+  durationMonths: number;
   message: string | null;
   rejectReason: string | null;
   createdAt: string;
@@ -160,6 +162,8 @@ export interface BookingWithRelations {
   seatNumber: string;
   roomNumber: string;
   rent: number;
+  agreedRent: number;
+  securityDeposit: number;
   seekerName: string;
   seekerPhone: string;
   seekerId: string;

@@ -20,6 +20,7 @@ model User {
   status    String   @default("ACTIVE") // ACTIVE | PENDING | SUSPENDED
   avatar    String?
   preferredAreas String? // comma-separated
+  commissionRate Float @default(5.0) // platform commission % for owners
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -27,6 +28,8 @@ model User {
   bookings  Booking[]
   reviews   Review[]
   favorites Favorite[]
+  payments  Payment[]
+  expenses  Expense[]
 }
 
 model Mess {
@@ -55,6 +58,7 @@ model Mess {
   rooms       Room[]
   reviews     Review[]
   favorites   Favorite[]
+  expenses   Expense[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -88,11 +92,52 @@ model Booking {
   seeker      User     @relation(fields: [seekerId], references: [id])
   moveInDate  DateTime
   duration    String   // e.g. "6 months"
+  durationMonths Int   @default(6)
   message     String?
-  status      String   @default("PENDING") // PENDING | CONFIRMED | REJECTED | WAITLISTED
+  status      String   @default("PENDING") // PENDING | CONFIRMED | REJECTED | WAITLISTED | COMPLETED | CHECKED_OUT
   rejectReason String?
+  securityDeposit Int  @default(0) // advance/security money
+  agreedRent  Int      @default(0) // monthly rent agreed
+  checkOutDate DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  payments    Payment[]
+}
+
+// Monthly rent payments from seekers
+model Payment {
+  id          String   @id @default(cuid())
+  bookingId   String
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  seekerId    String
+  seeker      User     @relation(fields: [seekerId], references: [id])
+  messId      String
+  amount      Int      // taka
+  type        String   // RENT | DEPOSIT | UTILITY | LATE_FEE | OTHER
+  month       String   // "2026-01" format — which month this payment is for
+  dueDate     DateTime
+  paidDate    DateTime?
+  status      String   @default("DUE") // DUE | PAID | OVERDUE | PARTIAL
+  method      String?  // CASH | BKASH | NAGAD | BANK
+  reference   String?  // transaction reference
+  note        String?
+  createdAt   DateTime @default(now())
+}
+
+// Owner expenses (utilities, maintenance, salary, etc.)
+model Expense {
+  id          String   @id @default(cuid())
+  messId      String
+  mess        Mess     @relation(fields: [messId], references: [id], onDelete: Cascade)
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id])
+  category    String   // UTILITY | MAINTENANCE | SALARY | FOOD | SECURITY | CLEANING | MARKETING | TAX | OTHER
+  amount      Int      // taka
+  description String
+  date        DateTime
+  recurring   Boolean  @default(false) // monthly recurring?
+  createdAt   DateTime @default(now())
 }
 
 model Review {

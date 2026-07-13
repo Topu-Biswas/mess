@@ -1,13 +1,12 @@
 "use client";
 
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useEffect } from "react";
 import type { MessSummary } from "@/lib/types";
 import { formatTaka, Rating } from "@/components/ui-bits";
-import { MapPin } from "lucide-react";
-import { useAppStore } from "@/lib/store";
+import { MapPin, Navigation, Crosshair } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Fix leaflet default icon
@@ -29,29 +28,54 @@ function makePin(availabilityPct: number, highlighted: boolean) {
   });
 }
 
+// User location pin — pulsing blue dot with label
+function makeUserPin(label: string) {
+  return L.divIcon({
+    className: "user-loc-pin",
+    html: `
+      <div style="position:relative;display:flex;flex-direction:column;align-items:center;">
+        <div style="background:#2563eb;color:white;font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.3);border:1.5px solid white;margin-bottom:2px;">
+          📍 ${label}
+        </div>
+        <div style="width:18px;height:18px;background:#2563eb;border:3px solid white;border-radius:50%;box-shadow:0 0 0 2px rgba(37,99,235,0.3),0 2px 6px rgba(0,0,0,0.3);"></div>
+        <div style="position:absolute;bottom:-3px;width:24px;height:24px;border-radius:50%;background:rgba(37,99,235,0.2);animation:user-pulse 2s ease-out infinite;"></div>
+      </div>
+    `,
+    iconSize: [120, 40],
+    iconAnchor: [60, 20],
+  });
+}
+
 function MapController({ center, radius }: { center: { lat: number; lng: number } | null; radius: number }) {
   const map = useMap();
-  const setBounds = useAppStore((s) => s.setMapBounds);
   useEffect(() => {
     if (center) map.setView([center.lat, center.lng], 14, { animate: true });
-  }, [center, map]);
-  useEffect(() => {
-    const onMove = () => {
-      const b = map.getBounds();
-      setBounds({ north: b.getNorth(), south: b.getSouth(), east: b.getEast(), west: b.getWest() });
-    };
-    map.on("moveend", onMove);
-    onMove();
-    return () => {
-      map.off("moveend", onMove);
-    };
-  }, [map, setBounds]);
+     
+  }, [center?.lat, center?.lng]);
   useEffect(() => {
     if (center && radius > 0) {
       map.fitBounds(L.latLng(center.lat, center.lng).toBounds(radius * 1000 * 2), { animate: true });
     }
      
   }, [radius]);
+  return null;
+}
+
+// Click handler — places a pin when in "pick mode"
+function ClickHandler({
+  pickMode,
+  onPick,
+}: {
+  pickMode: boolean;
+  onPick: (lat: number, lng: number) => void;
+}) {
+  useMapEvents({
+    click(e) {
+      if (pickMode) {
+        onPick(e.latlng.lat, e.latlng.lng);
+      }
+    },
+  });
   return null;
 }
 
@@ -66,6 +90,8 @@ export function MapView({
   setHoveredMessId,
   setSelectedMapMessId,
   openMess,
+  pickMode,
+  onPickLocation,
 }: {
   messes: MessSummary[];
   searchCenter: { lat: number; lng: number; label: string } | null;
@@ -77,11 +103,24 @@ export function MapView({
   setHoveredMessId: (id: string | null) => void;
   setSelectedMapMessId: (id: string | null) => void;
   openMess: (id: string) => void;
+  pickMode: boolean;
+  onPickLocation: (lat: number, lng: number) => void;
 }) {
   const mapCenter: [number, number] = searchCenter ? [searchCenter.lat, searchCenter.lng] : [23.7806, 90.4193];
 
   return (
-    <MapContainer center={mapCenter} zoom={13} scrollWheelZoom className="h-full w-full">
+    <MapContainer
+      center={mapCenter}
+      zoom={13}
+      scrollWheelZoom
+      className={cn("h-full w-full", pickMode && "cursor-crosshair")}
+    >
+      <style>{`
+        @keyframes user-pulse {
+          0% { transform: scale(0.8); opacity: 0.8; }
+          100% { transform: scale(2.5); opacity: 0; }
+        }
+      `}</style>
       <TileLayer
         url={satellite
           ? "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
@@ -90,13 +129,21 @@ export function MapView({
         attribution={satellite ? "Tiles &copy; Esri" : "&copy; OpenStreetMap"}
       />
       <MapController center={searchCenter} radius={radius} />
+      <ClickHandler pickMode={pickMode} onPick={onPickLocation} />
 
       {searchCenter && useLocation && (
-        <Circle
-          center={[searchCenter.lat, searchCenter.lng]}
-          radius={radius * 1000}
-          pathOptions={{ color: "#10b981", fillColor: "#10b981", fillOpacity: 0.08, weight: 1.5 }}
-        />
+        <>
+          <Circle
+            center={[searchCenter.lat, searchCenter.lng]}
+            radius={radius * 1000}
+            pathOptions={{ color: "#2563eb", fillColor: "#2563eb", fillOpacity: 0.06, weight: 1.5, dashArray: "6 4" }}
+          />
+          <Marker
+            position={[searchCenter.lat, searchCenter.lng]}
+            icon={makeUserPin(searchCenter.label)}
+            interactive={false}
+          />
+        </>
       )}
 
       {messes.map((m) => {
