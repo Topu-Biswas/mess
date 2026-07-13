@@ -52,3 +52,19 @@ prompt
 server.log
 # Skills directory
 /skills/
+# environment & database
+.env
+.env.local
+db/*.db
+db/*.db-journal
+
+# logs & temp
+dev.log
+watchdog.log
+*.log
+agent-ctx/
+audit-*.png
+screenshot-*.png
+verify-*.png
+final-*.png
+DESIGN-GUIDE.html
