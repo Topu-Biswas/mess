@@ -1,7 +1,6 @@
 // Firebase client-side initialization
 // IMPORTANT: This file is client-only. Never import in server components.
-// NOTE: Storage removed — we use external image URLs only (no paid Firebase plan needed).
-// Services: Analytics, Auth, Messaging (FCM), Firestore (real-time chat)
+// All operations are wrapped in try-catch to prevent client-side crashes.
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAnalytics, isSupported, type Analytics } from "firebase/analytics";
 import { getAuth, GoogleAuthProvider, type Auth } from "firebase/auth";
@@ -18,20 +17,27 @@ export const firebaseConfig = {
   measurementId: "G-46JS6HJ3D4",
 };
 
-// Initialize app once (singleton)
+// Initialize app once (singleton) — wrapped in try-catch
 let app: FirebaseApp | null = null;
 let analyticsInstance: Analytics | null = null;
 let authInstance: Auth | null = null;
 let messagingInstance: Messaging | null = null;
 let firestoreInstance: Firestore | null = null;
+let googleProvider: GoogleAuthProvider | null = null;
 
-if (typeof window !== "undefined" && getApps().length === 0) {
-  app = initializeApp(firebaseConfig);
-} else if (typeof window !== "undefined") {
-  app = getApps()[0];
+if (typeof window !== "undefined") {
+  try {
+    if (getApps().length === 0) {
+      app = initializeApp(firebaseConfig);
+    } else {
+      app = getApps()[0];
+    }
+  } catch {
+    app = null;
+  }
 }
 
-// Analytics (client + measurementId supported)
+// Analytics
 export async function getFirebaseAnalytics(): Promise<Analytics | null> {
   if (typeof window === "undefined" || !app) return null;
   if (analyticsInstance) return analyticsInstance;
@@ -42,7 +48,7 @@ export async function getFirebaseAnalytics(): Promise<Analytics | null> {
       return analyticsInstance;
     }
   } catch {
-    // analytics not supported (e.g. privacy mode)
+    // analytics not supported
   }
   return null;
 }
@@ -50,11 +56,26 @@ export async function getFirebaseAnalytics(): Promise<Analytics | null> {
 // Auth
 export function getFirebaseAuth(): Auth | null {
   if (typeof window === "undefined" || !app) return null;
-  if (!authInstance) authInstance = getAuth(app);
+  if (!authInstance) {
+    try {
+      authInstance = getAuth(app);
+    } catch {
+      authInstance = null;
+    }
+  }
   return authInstance;
 }
 
-export const googleProvider = new GoogleAuthProvider();
+export function getGoogleProvider(): GoogleAuthProvider | null {
+  if (!googleProvider) {
+    try {
+      googleProvider = new GoogleAuthProvider();
+    } catch {
+      googleProvider = null;
+    }
+  }
+  return googleProvider;
+}
 
 // Messaging (FCM)
 export async function getFirebaseMessaging(): Promise<Messaging | null> {
@@ -68,10 +89,16 @@ export async function getFirebaseMessaging(): Promise<Messaging | null> {
   }
 }
 
-// Firestore (real-time database for chat)
+// Firestore
 export function getFirestoreDb(): Firestore | null {
   if (typeof window === "undefined" || !app) return null;
-  if (!firestoreInstance) firestoreInstance = getFirestore(app);
+  if (!firestoreInstance) {
+    try {
+      firestoreInstance = getFirestore(app);
+    } catch {
+      firestoreInstance = null;
+    }
+  }
   return firestoreInstance;
 }
 

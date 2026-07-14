@@ -26,16 +26,13 @@ export default function Home() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 
-  // hydrate user from persisted store on first mount (zustand persist handles this, but ensure SSR-safe)
+  // Re-validate user session with backend (safely)
   useEffect(() => {
-    if (!mounted) return;
-    // re-validate user session with backend
-    const stored = useAppStore.persist?.hasHydrated?.();
-    if (stored && user) {
+    if (!mounted || !user) return;
+    try {
       fetch("/api/auth/me", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -44,12 +41,10 @@ export default function Home() {
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
           if (data?.user) useAppStore.getState().setUser(data.user);
-          else if (data === null) useAppStore.getState().setUser(null);
         })
         .catch(() => {});
-    }
-     
-  }, [mounted]);
+    } catch {}
+  }, [mounted, user]);
 
   if (!mounted) {
     return (
@@ -78,7 +73,6 @@ export default function Home() {
           {view === "how-it-works" && <HowItWorksView />}
           {view === "contact" && <ContactView />}
         </main>
-        {/* Hide footer on search view (full-screen map experience) */}
         {view !== "search" && <Footer />}
         <AuthModal />
         <PWAInstall />

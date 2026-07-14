@@ -629,7 +629,7 @@ function OverviewTab({
 
   useEffect(() => {
     let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     setStatsLoading(true);
     setStatsError(false);
     fetch(`/api/owner/stats?ownerId=${owner.id}`)
@@ -1641,7 +1641,7 @@ function TenantsTab({ messes, loading }: { messes: OwnerMess[]; loading: boolean
   useEffect(() => {
     if (loading || messes.length === 0) return;
     let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     setFetching(true);
     setFetchError(false);
     Promise.all(

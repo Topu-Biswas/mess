@@ -1,7 +1,7 @@
 "use client";
 
 import { signInWithPopup, signOut as fbSignOut, type User } from "firebase/auth";
-import { getFirebaseAuth, googleProvider } from "@/lib/firebase";
+import { getFirebaseAuth, getGoogleProvider } from "@/lib/firebase";
 
 export interface GoogleSignInResult {
   uid: string;
@@ -14,7 +14,9 @@ export interface GoogleSignInResult {
 export async function signInWithGoogle(): Promise<GoogleSignInResult> {
   const auth = getFirebaseAuth();
   if (!auth) throw new Error("Firebase Auth লোড হয়নি");
-  const result = await signInWithPopup(auth, googleProvider);
+  const provider = getGoogleProvider();
+  if (!provider) throw new Error("Google Provider লোড হয়নি");
+  const result = await signInWithPopup(auth, provider);
   const user: User = result.user;
   return {
     uid: user.uid,

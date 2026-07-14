@@ -206,7 +206,7 @@ export function SeekerDashboard() {
     if (!user) return;
     if (seekerTab !== "payments" && seekerTab !== "bookings") return;
     let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     setPaymentsError(false);
     fetch(`/api/seeker/payments?seekerId=${user.id}`)
       .then((r) => r.json())
