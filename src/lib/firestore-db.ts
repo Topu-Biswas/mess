@@ -7,7 +7,6 @@ import {
   getDoc,
   getDocs,
   setDoc,
-  updateDoc,
   deleteDoc,
   query,
   where,
@@ -168,7 +167,7 @@ export async function createUser(data: Omit<FirestoreUser, "id" | "createdAt">):
 }
 
 export async function updateUser(id: string, data: Partial<FirestoreUser>): Promise<void> {
-  await updateDoc(doc(adminDb, "users", id), data as Record<string, unknown>);
+  await setDoc(doc(adminDb, "users", id), data as Record<string, unknown>, { merge: true });
 }
 
 export async function getUserByPhone(phone: string): Promise<FirestoreUser | null> {
@@ -238,7 +237,8 @@ export async function createMess(data: Omit<FirestoreMess, "id" | "createdAt" | 
 }
 
 export async function updateMess(id: string, data: Partial<FirestoreMess>): Promise<void> {
-  await updateDoc(doc(adminDb, "messes", id), { ...data, updatedAt: serverTimestamp() } as Record<string, unknown>);
+  // Use setDoc with merge to create-or-update (avoids NOT_FOUND error)
+  await setDoc(doc(adminDb, "messes", id), { ...data, updatedAt: serverTimestamp() } as Record<string, unknown>, { merge: true });
 }
 
 // ============ Room Operations ============
@@ -274,7 +274,7 @@ export async function createSeat(data: Omit<FirestoreSeat, "id">): Promise<strin
 }
 
 export async function updateSeat(id: string, data: Partial<FirestoreSeat>): Promise<void> {
-  await updateDoc(doc(adminDb, "seats", id), data as Record<string, unknown>);
+  await setDoc(doc(adminDb, "seats", id), data as Record<string, unknown>, { merge: true });
 }
 
 export async function getSeatById(id: string): Promise<FirestoreSeat | null> {
@@ -317,7 +317,7 @@ export async function createBooking(data: Omit<FirestoreBooking, "id" | "created
 }
 
 export async function updateBooking(id: string, data: Partial<FirestoreBooking>): Promise<void> {
-  await updateDoc(doc(adminDb, "bookings", id), data as Record<string, unknown>);
+  await setDoc(doc(adminDb, "bookings", id), data as Record<string, unknown>, { merge: true });
 }
 
 // ============ Payment Operations ============
@@ -359,7 +359,7 @@ export async function createPayment(data: Omit<FirestorePayment, "id">): Promise
 }
 
 export async function updatePayment(id: string, data: Partial<FirestorePayment>): Promise<void> {
-  await updateDoc(doc(adminDb, "payments", id), data as Record<string, unknown>);
+  await setDoc(doc(adminDb, "payments", id), data as Record<string, unknown>, { merge: true });
 }
 
 export async function getPaymentById(id: string): Promise<FirestorePayment | null> {
