@@ -398,8 +398,8 @@ function OverviewTab() {
 
   useEffect(() => {
     let cancelled = false;
-     
-    setLoading(true);
+    // Only show full loading skeleton on first load (when no data exists)
+    if (!data) setLoading(true);
     setError(false);
     Promise.all([
       fetch("/api/admin/overview").then((r) => r.json()),
@@ -407,10 +407,10 @@ function OverviewTab() {
     ])
       .then(([d, f]) => {
         if (cancelled) return;
-        setData(d);
+        if (d?.overview) setData(d);
         if (f?.finance) setFinance(f.finance as FinanceData);
       })
-      .catch(() => { if (!cancelled) { setError(true); toast.error("ওভারভিউ লোড ব্যর্থ"); } })
+      .catch(() => { if (!cancelled && !data) { setError(true); toast.error("ওভারভিউ লোড ব্যর্থ"); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [retryCount]);
@@ -859,7 +859,10 @@ function OwnersTab() {
       setPending(p.owners ?? []);
       setAll(a.owners ?? []);
     } catch {
-      toast.error("মালিক তালিকা লোড ব্যর্থ");
+      // Don't show error toast if we already have data
+      if (pending.length === 0 && all.length === 0) {
+        toast.error("মালিক তালিকা লোড ব্যর্থ");
+      }
     } finally {
       setLoading(false);
     }
@@ -1208,7 +1211,7 @@ function ListingsTab() {
       setReported(r.listings ?? []);
       setAll(a.listings ?? []);
     } catch {
-      toast.error("লিস্টিং লোড ব্যর্থ");
+      if (!reported.length && !all.length) toast.error("লিস্টিং লোড ব্যর্থ");
     } finally {
       setLoading(false);
     }
@@ -1343,7 +1346,7 @@ function UsersTab() {
     fetch("/api/admin/users")
       .then((r) => r.json())
       .then((d) => setUsers(d.users ?? []))
-      .catch(() => toast.error("ইউজার লোড ব্যর্থ"))
+      .catch(() => { if (!users.length) toast.error("ইউজার লোড ব্যর্থ"); })
       .finally(() => setLoading(false));
   }, []);
 
@@ -1805,7 +1808,7 @@ function ConfigTab() {
         }));
         setFeaturedList(list);
       })
-      .catch(() => toast.error("মেস তালিকা লোড ব্যর্থ"))
+      .catch(() => { if (!featuredList.length) toast.error("মেস তালিকা লোড ব্যর্থ"); })
       .finally(() => setLoading(false));
   }, []);
 
@@ -2001,7 +2004,7 @@ function LogsTab() {
     fetch("/api/admin/logs")
       .then((r) => r.json())
       .then((d) => setLogs(d.logs ?? []))
-      .catch(() => toast.error("লগ লোড ব্যর্থ"))
+      .catch(() => { if (!logs.length) toast.error("লগ লোড ব্যর্থ"); })
       .finally(() => setLoading(false));
   }, []);
 

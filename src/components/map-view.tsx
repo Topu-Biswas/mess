@@ -1,13 +1,13 @@
 "use client";
 
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Circle, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useEffect } from "react";
 import type { MessSummary } from "@/lib/types";
-import { formatTaka, Rating } from "@/components/ui-bits";
-import { MapPin, Navigation, Crosshair } from "lucide-react";
+import { formatTaka } from "@/components/ui-bits";
 import { MessGraphic } from "@/components/mess-graphic";
+import { MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Fix leaflet default icon
@@ -29,7 +29,7 @@ function makePin(availabilityPct: number, highlighted: boolean) {
   });
 }
 
-// User location pin — pulsing blue dot with label
+// User location pin
 function makeUserPin(label: string) {
   return L.divIcon({
     className: "user-loc-pin",
@@ -39,7 +39,6 @@ function makeUserPin(label: string) {
           📍 ${label}
         </div>
         <div style="width:18px;height:18px;background:#2563eb;border:3px solid white;border-radius:50%;box-shadow:0 0 0 2px rgba(37,99,235,0.3),0 2px 6px rgba(0,0,0,0.3);"></div>
-        <div style="position:absolute;bottom:-3px;width:24px;height:24px;border-radius:50%;background:rgba(37,99,235,0.2);animation:user-pulse 2s ease-out infinite;"></div>
       </div>
     `,
     iconSize: [120, 40],
@@ -51,18 +50,16 @@ function MapController({ center, radius }: { center: { lat: number; lng: number 
   const map = useMap();
   useEffect(() => {
     if (center) map.setView([center.lat, center.lng], 14, { animate: true });
-     
   }, [center?.lat, center?.lng]);
   useEffect(() => {
     if (center && radius > 0) {
       map.fitBounds(L.latLng(center.lat, center.lng).toBounds(radius * 1000 * 2), { animate: true });
     }
-     
   }, [radius]);
   return null;
 }
 
-// Click handler — places a pin when in "pick mode"
+// Click handler
 function ClickHandler({
   pickMode,
   onPick,
@@ -156,38 +153,13 @@ export function MapView({
             position={[m.lat, m.lng]}
             icon={makePin(pct, highlighted)}
             eventHandlers={{
-              click: () => setSelectedMapMessId(m.id),
+              click: () => {
+                setSelectedMapMessId(m.id);
+              },
               mouseover: () => setHoveredMessId(m.id),
               mouseout: () => setHoveredMessId(null),
             }}
-          >
-            <Popup>
-              <div className="w-48">
-                <div className="w-full h-24 rounded mb-2 overflow-hidden">
-                  <MessGraphic type={m.type} name={m.name} area={m.area} className="h-full w-full" iconSize="h-8 w-8" />
-                </div>
-                <div className="font-bold text-xs mb-0.5">{m.name}</div>
-                <div className="flex items-center gap-1 text-[10px] text-muted-foreground mb-1">
-                  <MapPin className="h-2.5 w-2.5" /> {m.area}
-                </div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="font-bold text-primary text-sm">{formatTaka(m.rentFrom)}</span>
-                  <Rating value={m.rating} count={m.reviewCount} showCount={false} size="sm" />
-                </div>
-                <div className="text-[10px] mb-2">
-                  <span className={cn("font-semibold", m.availableSeats > 0 ? "text-emerald-600" : "text-red-500")}>
-                    {m.availableSeats > 0 ? `${m.availableSeats} সিট ফাঁকা` : "সিট নেই"}
-                  </span>
-                </div>
-                <button
-                  onClick={() => openMess(m.id)}
-                  className="w-full bg-primary text-primary-foreground text-xs font-semibold py-1 rounded hover:bg-primary/90"
-                >
-                  বিস্তারিত দেখুন
-                </button>
-              </div>
-            </Popup>
-          </Marker>
+          />
         );
       })}
     </MapContainer>
