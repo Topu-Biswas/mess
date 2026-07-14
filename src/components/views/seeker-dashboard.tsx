@@ -24,6 +24,7 @@ import { useAppStore } from "@/lib/store";
 import type { BookingWithRelations, BookingStatus, SeekerTab } from "@/lib/types";
 import { formatTaka, Rating } from "@/components/ui-bits";
 import { MessCard } from "@/components/mess-card";
+import { MessGraphic } from "@/components/mess-graphic";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -345,7 +346,7 @@ export function SeekerDashboard() {
                       >
                         <CardContent className="p-3">
                           <div className="flex items-center gap-3">
-                            <img src={b.messImage} alt={b.messName} className="h-16 w-16 rounded-lg object-cover shrink-0" />
+                            <div className="h-16 w-16 rounded-lg overflow-hidden shrink-0"><MessGraphic className="h-full w-full" iconSize="h-5 w-5" showName={false} /></div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center justify-between gap-2">
                                 <h3 className="font-bold text-sm truncate">{b.messName}</h3>
@@ -424,7 +425,7 @@ export function SeekerDashboard() {
                   {favorites.map((f) => (
                     <Card key={f.id} className="overflow-hidden cursor-pointer hover:shadow-md transition-shadow" onClick={() => openMess(f.id)}>
                       <div className="aspect-[4/3] bg-muted relative">
-                        <img src={f.image} alt={f.name} className="h-full w-full object-cover" />
+                        <MessGraphic className="h-full w-full" iconSize="h-6 w-6" showName={false} />
                         <Badge className="absolute top-2 right-2 bg-red-500 text-white">
                           <Heart className="h-3 w-3 fill-current" />
                         </Badge>

@@ -14,6 +14,7 @@ import { formatTaka } from "@/components/ui-bits";
 import { cn } from "@/lib/utils";
 import { showLocalNotification } from "@/lib/firebase-messaging";
 import { analyticsEvents } from "@/lib/analytics";
+import { MessGraphic } from "@/components/mess-graphic";
 
 const STATUS_CONFIG: Record<BookingStatus, { label: string; icon: typeof Clock; color: string; bg: string; step: number }> = {
   PENDING: { label: "পেন্ডিং", icon: Clock, color: "text-amber-600", bg: "bg-amber-100 dark:bg-amber-950", step: 1 },
@@ -127,7 +128,7 @@ export function BookingStatusView() {
         <CardContent className="p-4 space-y-3">
           <div className="flex items-start gap-3">
             { }
-            <img src={booking.messImage} alt={booking.messName} className="h-16 w-16 rounded-lg object-cover" />
+            <div className="h-16 w-16 rounded-lg overflow-hidden shrink-0"><MessGraphic className="h-full w-full" iconSize="h-5 w-5" showName={false} /></div>
             <div className="flex-1">
               <h3 className="font-bold">{booking.messName}</h3>
               <div className="flex items-center gap-1 text-xs text-muted-foreground">

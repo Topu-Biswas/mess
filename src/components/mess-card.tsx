@@ -6,6 +6,7 @@ import { MapPin, Heart, Users } from "lucide-react";
 import type { MessSummary } from "@/lib/types";
 import { Rating, VerifiedBadge, formatTaka, MessTypeBadge } from "@/components/ui-bits";
 import { FacilityIcon } from "@/components/facility-icon";
+import { MessGraphic } from "@/components/mess-graphic";
 import { useAppStore } from "@/lib/store";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -14,12 +15,10 @@ export function MessCard({
   mess,
   highlight,
   onHover,
-  layout = "grid",
 }: {
   mess: MessSummary;
   highlight?: boolean;
   onHover?: (id: string | null) => void;
-  layout?: "grid" | "list";
 }) {
   const openMess = useAppStore((s) => s.openMess);
   const user = useAppStore((s) => s.user);
@@ -54,18 +53,12 @@ export function MessCard({
       onMouseLeave={() => onHover?.(null)}
       className={cn(
         "group cursor-pointer overflow-hidden p-0 transition-all hover:shadow-lg hover:-translate-y-0.5",
-        highlight && "ring-2 ring-primary",
-        layout === "list" && "flex flex-row"
+        highlight && "ring-2 ring-primary"
       )}
     >
-      <div className={cn("relative overflow-hidden bg-muted", layout === "list" ? "w-32 shrink-0" : "aspect-[4/3]")}>
-        { }
-        <img
-          src={mess.image || "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=600&q=80"}
-          alt={mess.name}
-          className="h-full w-full object-cover transition-transform group-hover:scale-105"
-          loading="lazy"
-        />
+      {/* Graphic header — no external image */}
+      <div className="relative aspect-[4/3]">
+        <MessGraphic type={mess.type} name={mess.name} area={mess.area} className="h-full w-full" />
         <div className="absolute top-2 left-2 flex gap-1.5">
           {mess.featured && <Badge className="bg-primary text-primary-foreground">ফিচার্ড</Badge>}
         </div>
@@ -82,7 +75,7 @@ export function MessCard({
         </div>
       </div>
 
-      <div className="p-3 flex-1 min-w-0">
+      <div className="p-3">
         <div className="flex items-start justify-between gap-2 mb-1">
           <h3 className="font-bold text-sm leading-snug line-clamp-1">{mess.name}</h3>
           {mess.verified && <VerifiedBadge />}

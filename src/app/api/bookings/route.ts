@@ -12,6 +12,7 @@ import {
   getSeatsByRoom,
   createBooking,
   updateSeat,
+  recalculateMessSeatCounts,
 } from "@/lib/firestore-db";
 import type { BookingWithRelations } from "@/lib/types";
 
@@ -121,6 +122,9 @@ export async function POST(req: NextRequest) {
 
   // mark seat pending
   await updateSeat(seatId, { status: "PENDING" });
+
+  // Update mess availableSeats count (real-time sync)
+  await recalculateMessSeatCounts(seat.messId);
 
   // generate unique reference
   let ref = genRef();

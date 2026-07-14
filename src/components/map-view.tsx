@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import type { MessSummary } from "@/lib/types";
 import { formatTaka, Rating } from "@/components/ui-bits";
 import { MapPin, Navigation, Crosshair } from "lucide-react";
+import { MessGraphic } from "@/components/mess-graphic";
 import { cn } from "@/lib/utils";
 
 // Fix leaflet default icon
@@ -162,8 +163,9 @@ export function MapView({
           >
             <Popup>
               <div className="w-48">
-                { }
-                <img src={m.image} alt={m.name} className="w-full h-24 object-cover rounded mb-2" />
+                <div className="w-full h-24 rounded mb-2 overflow-hidden">
+                  <MessGraphic type={m.type} name={m.name} area={m.area} className="h-full w-full" iconSize="h-8 w-8" />
+                </div>
                 <div className="font-bold text-xs mb-0.5">{m.name}</div>
                 <div className="flex items-center gap-1 text-[10px] text-muted-foreground mb-1">
                   <MapPin className="h-2.5 w-2.5" /> {m.area}

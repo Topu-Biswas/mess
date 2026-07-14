@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { analyticsEvents } from "@/lib/analytics";
 import { RealtimeChat } from "@/components/realtime-chat";
+import { MessGraphic } from "@/components/mess-graphic";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -154,11 +155,10 @@ export function DetailsView() {
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Left: main content */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Gallery */}
+          {/* Gallery — graphical placeholder, no external images */}
           <div>
-            <div className="relative aspect-[16/10] rounded-xl overflow-hidden bg-muted">
-              { }
-              <img src={mess.images[activeImg] ?? mess.images[0]} alt={mess.name} className="h-full w-full object-cover" />
+            <div className="relative aspect-[16/10] rounded-xl overflow-hidden">
+              <MessGraphic type={mess.type} name={mess.name} area={mess.area} className="h-full w-full" iconSize="h-20 w-20" />
               <div className="absolute top-3 right-3 flex gap-2">
                 <button onClick={toggleFav} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 backdrop-blur hover:bg-white">
                   <Heart className={cn("h-4 w-4", fav ? "fill-red-500 text-red-500" : "text-gray-700")} />
@@ -172,23 +172,6 @@ export function DetailsView() {
                 <MessTypeBadge type={mess.type} />
               </div>
             </div>
-            {mess.images.length > 1 && (
-              <div className="mt-2 flex gap-2 overflow-x-auto scroll-thin">
-                {mess.images.map((img, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setActiveImg(i)}
-                    className={cn(
-                      "h-16 w-24 rounded-lg overflow-hidden shrink-0 border-2",
-                      activeImg === i ? "border-primary" : "border-transparent opacity-70"
-                    )}
-                  >
-                    { }
-                    <img src={img} alt="" className="h-full w-full object-cover" />
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
           {/* Header info */}

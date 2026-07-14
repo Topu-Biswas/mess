@@ -277,6 +277,14 @@ export async function updateSeat(id: string, data: Partial<FirestoreSeat>): Prom
   await setDoc(doc(adminDb, "seats", id), data as Record<string, unknown>, { merge: true });
 }
 
+// Recalculate mess totalSeats and availableSeats — call whenever seats change
+export async function recalculateMessSeatCounts(messId: string): Promise<void> {
+  const seats = await getSeatsByMess(messId);
+  const totalSeats = seats.length;
+  const availableSeats = seats.filter((s) => s.status === "AVAILABLE").length;
+  await setDoc(doc(adminDb, "messes", messId), { totalSeats, availableSeats: availableSeats, updatedAt: serverTimestamp() } as Record<string, unknown>, { merge: true });
+}
+
 export async function getSeatById(id: string): Promise<FirestoreSeat | null> {
   const snap = await getDoc(doc(adminDb, "seats", id));
   if (!snap.exists) return null;

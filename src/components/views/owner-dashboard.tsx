@@ -69,6 +69,7 @@ import { cn } from "@/lib/utils";
 import { Rating, VerifiedBadge, formatTaka } from "@/components/ui-bits";
 import { SeatBox, SeatLegend, STATUS_CONFIG } from "@/components/seat-chart";
 import { FacilityIcon } from "@/components/facility-icon";
+import { MessGraphic } from "@/components/mess-graphic";
 import { analyticsEvents } from "@/lib/analytics";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";

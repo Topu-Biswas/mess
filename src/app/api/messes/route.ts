@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  getAllMesses,
-  getRoomsByMess,
-  getSeatsByRoom,
-} from "@/lib/firestore-db";
+import { getAllMesses } from "@/lib/firestore-db";
 import type { MessSummary, MessType } from "@/lib/types";
 import { POPULAR_AREAS } from "@/lib/types";
 
@@ -61,21 +57,13 @@ export async function GET(req: NextRequest) {
     if (!m.published) continue;
     if (types.length && !types.includes(m.type as MessType)) continue;
     if (featuredOnly && !m.featured) continue;
-    if (m.rentFrom < budgetMin) continue;
-    if (m.rentTo > budgetMax) continue;
+    // Budget filter: mess matches if its rent range overlaps with [budgetMin, budgetMax]
+    if (m.rentFrom > budgetMax || m.rentTo < budgetMin) continue;
     if (m.rating < minRating) continue;
 
-    // Build seats by walking rooms -> seats
-    const rooms = await getRoomsByMess(m.id);
-    let totalSeats = 0;
-    let availableSeats = 0;
-    for (const r of rooms) {
-      const seats = await getSeatsByRoom(r.id);
-      for (const s of seats) {
-        totalSeats++;
-        if (s.status === "AVAILABLE") availableSeats++;
-      }
-    }
+    // Use pre-calculated seat counts from mess doc (faster than walking rooms)
+    const totalSeats = (m as any).totalSeats ?? 0;
+    const availableSeats = (m as any).availableSeats ?? (m as any).available_seats ?? 0;
     if (onlyAvailable && availableSeats === 0) continue;
 
     const messFacilities = Array.isArray(m.facilities)

@@ -17,6 +17,7 @@ import { FACILITIES, MESS_TYPE_LABELS, POPULAR_AREAS, type Filters, type MessSum
 import { MessCard } from "@/components/mess-card";
 import { formatTaka } from "@/components/ui-bits";
 import { FacilityIcon } from "@/components/facility-icon";
+import { MessGraphic } from "@/components/mess-graphic";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -366,8 +367,9 @@ export function SearchView() {
                   if (!m) return null;
                   return (
                     <div className="bg-background rounded-xl shadow-xl border p-3 flex gap-3 animate-fade-in-up">
-                      { }
-                      <img src={m.image} alt={m.name} className="w-20 h-20 rounded-lg object-cover shrink-0" />
+                      <div className="w-20 h-20 rounded-lg overflow-hidden shrink-0">
+                        <MessGraphic type={m.type} name={m.name} className="h-full w-full" iconSize="h-6 w-6" showName={false} />
+                      </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                           <h4 className="font-bold text-sm line-clamp-1">{m.name}</h4>
