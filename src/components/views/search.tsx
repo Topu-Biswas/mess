@@ -435,19 +435,27 @@ export function SearchView() {
         )}
       </div>
 
-      {/* Mobile filters sheet */}
+      {/* Mobile filters bottom-sheet — half screen, map visible above */}
       {showFiltersMobile && (
-        <div className="fixed inset-0 z-50 md:hidden">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setShowFiltersMobile(false)} />
-          <div className="absolute bottom-0 left-0 right-0 bg-background rounded-t-2xl max-h-[85vh] overflow-y-auto scroll-thin p-5 animate-fade-in-up">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold">ফিল্টার</h3>
-              <button onClick={() => setShowFiltersMobile(false)}><X className="h-5 w-5" /></button>
+        <div className="fixed inset-x-0 bottom-0 z-50 md:hidden" style={{ top: "40%" }}>
+          <div className="absolute inset-0 bg-black/30" onClick={() => setShowFiltersMobile(false)} />
+          <div className="relative bg-background rounded-t-2xl shadow-2xl h-full overflow-hidden flex flex-col animate-fade-in-up">
+            <div className="flex items-center justify-between p-3 border-b shrink-0">
+              <h3 className="font-bold text-sm flex items-center gap-1.5">
+                <SlidersHorizontal className="h-4 w-4" /> ফিল্টার
+              </h3>
+              <button onClick={() => setShowFiltersMobile(false)} className="p-1 rounded-md hover:bg-muted">
+                <X className="h-5 w-5" />
+              </button>
             </div>
-            {FiltersPanel}
-            <Button className="w-full mt-4" onClick={() => setShowFiltersMobile(false)}>
-              {messes.length} টি মেস দেখুন
-            </Button>
+            <div className="flex-1 overflow-y-auto scroll-thin p-4">
+              {FiltersPanel}
+            </div>
+            <div className="p-3 border-t shrink-0">
+              <Button className="w-full" onClick={() => setShowFiltersMobile(false)}>
+                {messes.length} টি মেস দেখুন
+              </Button>
+            </div>
           </div>
         </div>
       )}
