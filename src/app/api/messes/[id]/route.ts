@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import {
+  getMessById,
+  getRoomsByMess,
+  getSeatsByRoom,
+  getReviewsByMess,
+  getUserById,
+} from "@/lib/firestore-db";
 import type { MessDetail } from "@/lib/types";
 
 export async function GET(
@@ -7,18 +13,49 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const m = await db.mess.findUnique({
-    where: { id },
-    include: {
-      owner: true,
-      rooms: { include: { seats: true } },
-      reviews: { include: { user: true }, orderBy: { createdAt: "desc" } },
-    },
-  });
-  if (!m) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const m = await getMessById(id);
+  if (!m)
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const images = JSON.parse(m.images || "[]") as string[];
-  const facilities = JSON.parse(m.facilities || "[]") as string[];
+  const owner = m.ownerId ? await getUserById(m.ownerId) : null;
+  const rooms = await getRoomsByMess(m.id);
+  const reviews = await getReviewsByMess(m.id);
+
+  const images = Array.isArray(m.images)
+    ? (m.images as string[])
+    : (() => {
+        try {
+          return JSON.parse((m.images as unknown as string) || "[]");
+        } catch {
+          return [];
+        }
+      })();
+  const facilities = Array.isArray(m.facilities)
+    ? (m.facilities as string[])
+    : (() => {
+        try {
+          return JSON.parse((m.facilities as unknown as string) || "[]");
+        } catch {
+          return [];
+        }
+      })();
+
+  const roomsWithSeats = await Promise.all(
+    rooms.map(async (r) => {
+      const seats = await getSeatsByRoom(r.id);
+      return {
+        id: r.id,
+        number: r.number,
+        seats: seats.map((s) => ({
+          id: s.id,
+          number: s.number,
+          rent: s.rent,
+          type: s.type,
+          status: s.status as MessDetail["rooms"][number]["seats"][number]["status"],
+        })),
+      };
+    })
+  );
 
   const detail: MessDetail = {
     id: m.id,
@@ -40,34 +77,26 @@ export async function GET(
     images,
     facilities,
     ownerId: m.ownerId,
-    ownerName: m.owner.name,
-    ownerPhone: m.owner.phone,
-    ownerVerified: m.owner.status === "ACTIVE",
-    rooms: m.rooms
-      .sort((a, b) => a.number.localeCompare(b.number))
-      .map((r) => ({
-        id: r.id,
-        number: r.number,
-        seats: r.seats
-          .sort((a, b) => a.number.localeCompare(b.number))
-          .map((s) => ({
-            id: s.id,
-            number: s.number,
-            rent: s.rent,
-            type: s.type,
-            status: s.status as MessDetail["rooms"][number]["seats"][number]["status"],
-          })),
+    ownerName: owner?.name ?? "",
+    ownerPhone: owner?.phone ?? "",
+    ownerVerified: owner?.status === "ACTIVE",
+    rooms: roomsWithSeats,
+    reviews: reviews
+      .sort((a, b) => {
+        const at = a.createdAt?.toMillis?.() ?? 0;
+        const bt = b.createdAt?.toMillis?.() ?? 0;
+        return bt - at;
+      })
+      .map((rv) => ({
+        id: rv.id,
+        rating: rv.rating,
+        comment: rv.comment,
+        userName: rv.userName,
+        ownerReply: rv.ownerReply,
+        createdAt: rv.createdAt?.toDate?.().toISOString() ?? new Date(0).toISOString(),
       })),
-    reviews: m.reviews.map((rv) => ({
-      id: rv.id,
-      rating: rv.rating,
-      comment: rv.comment,
-      userName: rv.user.name,
-      ownerReply: rv.ownerReply,
-      createdAt: rv.createdAt.toISOString(),
-    })),
-    createdAt: m.createdAt.toISOString(),
-    updatedAt: m.updatedAt.toISOString(),
+    createdAt: m.createdAt?.toDate?.().toISOString() ?? new Date(0).toISOString(),
+    updatedAt: m.updatedAt?.toDate?.().toISOString() ?? new Date(0).toISOString(),
   };
 
   return NextResponse.json({ mess: detail });

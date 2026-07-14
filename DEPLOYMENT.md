@@ -1,122 +1,59 @@
-# ==============================
-# মেস ফাইন্ডার — Vercel Production Deployment Guide
-# ==============================
+# মেস ফাইন্ডার — Vercel Deployment Guide (Firebase Only)
 
-## Prerequisites
-1. A [Vercel](https://vercel.com) account
-2. A [PostgreSQL](https://www.postgresql.org) database (use [Neon](https://neon.tech), [Supabase](https://supabase.com), or [Vercel Postgres](https://vercel.com/docs/storage/vercel-postgres) — all have free tiers)
-3. Firebase project already set up (মেস-66852)
+## Architecture
+- **Database:** Firebase Firestore (no Prisma, no SQLite, no PostgreSQL)
+- **Auth:** Firebase Authentication (Google Sign-In)
+- **Storage:** None (external image URLs only)
+- **Analytics:** Firebase Analytics
+- **Messaging:** Firebase Cloud Messaging (push notifications)
 
-## Step 1: Database Setup (PostgreSQL — required for Vercel)
+## Deploy Steps (fully automated)
 
-SQLite doesn't work on Vercel (read-only filesystem). Use PostgreSQL instead:
+### 1. Push to GitHub
+Repository: https://github.com/Topu-Biswas/mess
 
-### Option A: Neon (recommended, free)
-1. Go to https://neon.tech and create a free account
-2. Create a new project named `mess-finder`
-3. Copy the connection string (looks like `postgresql://user:pass@host/db?sslmode=require`)
+### 2. Import to Vercel
+1. Go to https://vercel.com/new
+2. Import the GitHub repo `Topu-Biswas/mess`
+3. Vercel auto-detects Next.js — **no settings needed**
+4. **No environment variables required** (Firebase config is in the code)
+5. Click Deploy
 
-### Option B: Supabase (free)
-1. Go to https://supabase.com and create a project
-2. Settings → Database → Connection string → URI
-
-### Option C: Vercel Postgres
-1. Vercel Dashboard → Your project → Storage → Create Database → Postgres
-
-## Step 2: Update Prisma for PostgreSQL
-
-The schema already supports PostgreSQL — just change the datasource in `prisma/schema.prisma`:
-
-```prisma
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-```
-
-Then run:
-```bash
-bun run db:migrate --name init
-# or
-bun run db:push
-```
-
-## Step 3: Set Environment Variables on Vercel
-
-In Vercel project settings → Environment Variables, add:
-
-| Name | Value | Environment |
-|---|---|---|
-| `DATABASE_URL` | `postgresql://...` (from Step 1) | Production, Preview |
-| `NEXTAUTH_SECRET` | (generate with `openssl rand -base64 32`) | Production |
-| `NEXTAUTH_URL` | `https://your-domain.vercel.app` | Production |
-
-## Step 4: Build Settings on Vercel
-
-- **Framework Preset:** Next.js
-- **Build Command:** `bun run build` (or `prisma generate && next build`)
-- **Install Command:** `bun install`
-- **Output Directory:** (leave default — Next.js handles)
-
-Add build hook in `package.json` (already configured):
-```json
-"postinstall": "prisma generate"
-```
-
-## Step 5: Seed Production Database
-
-After first deploy, seed the database by calling the seed API once:
-
+### 3. Seed Firestore (one-time)
+After deploy, call the seed API:
 ```bash
 curl -X POST https://your-domain.vercel.app/api/seed
 ```
+Or visit the site and the seed will run automatically if no data exists.
 
-Or use the Prisma seed script:
-```bash
-DATABASE_URL=postgresql://... bun run db:seed
+### 4. Firebase Console Setup
+In https://console.firebase.google.com/project/mess-66852:
+
+1. **Authentication → Sign-in method → Enable Google**
+2. **Authentication → Settings → Authorized domains → Add your Vercel domain**
+3. **Firestore Database → Create database** (start in production mode)
+4. **Firestore Rules** (set to permissive for now):
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
 ```
 
-## Step 6: Firebase Console Settings
+## Demo Logins (for testing)
+| Role | Phone | Password |
+|---|---|---|
+| সিকার | `01800000000` | `seeker123` |
+| মালিক | `01711111111` | `owner123` |
+| এডমিন | `01700000000` | `admin123` |
 
-In Firebase Console → Authentication → Settings → Authorized domains, add:
-- `your-domain.vercel.app`
-- `*.vercel.app` (for preview deployments)
-
-## Step 7: Deploy
-
-```bash
-# Install Vercel CLI
-npm i -g vercel
-
-# Deploy from project root
-vercel
-
-# Deploy to production
-vercel --prod
-```
-
-Or connect your GitHub repo (https://github.com/Topu-Biswas/mess) in Vercel dashboard for auto-deploy on every push.
-
-## PWA Features Enabled
-
-- ✅ Installable (Add to Home Screen) — manifest.json + icons
-- ✅ Offline support — service worker caches app shell
-- ✅ App shortcuts (মেস খুঁজুন, ড্যাশবোর্ড)
-- ✅ Splash screen, theme color, apple touch icons
-- ✅ Standalone display mode
-
-## Firebase Services (all free tier)
-- ✅ Analytics — event tracking (no cost)
-- ✅ Authentication — Google Sign-In (no cost)
-- ✅ Cloud Messaging — push notifications (no cost)
-- ❌ Storage — NOT used (external image URLs only — no paid plan needed)
-
-## Post-Deploy Checklist
-- [ ] Database migrated to PostgreSQL
-- [ ] Environment variables set on Vercel
-- [ ] Database seeded
-- [ ] Firebase authorized domains updated
-- [ ] Test Google login works
-- [ ] Test map loads on mobile
-- [ ] Test PWA install prompt on mobile Chrome
-- [ ] Verify offline mode (disable network, reload)
+## No Manual Setup Needed
+- ✅ No DATABASE_URL
+- ✅ No PostgreSQL/Supabase/Neon
+- ✅ No Prisma migration
+- ✅ Firebase config is in the code
+- ✅ Vercel auto-detects everything

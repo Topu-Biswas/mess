@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import type { MessSummary, MessType, Filters } from "@/lib/types";
+import {
+  getAllMesses,
+  getRoomsByMess,
+  getSeatsByRoom,
+} from "@/lib/firestore-db";
+import type { MessSummary, MessType } from "@/lib/types";
 import { POPULAR_AREAS } from "@/lib/types";
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number) {
@@ -49,32 +53,45 @@ export async function GET(req: NextRequest) {
     centerLng = Number(userLng);
   }
 
-  const messes = await db.mess.findMany({
-    where: {
-      published: true,
-      ...(types.length ? { type: { in: types } } : {}),
-      ...(featuredOnly ? { featured: true } : {}),
-      rentFrom: { gte: budgetMin },
-      rentTo: { lte: budgetMax },
-      rating: { gte: minRating },
-    },
-    include: { rooms: { include: { seats: true } } },
-  });
+  // Fetch all messes; filter client-side
+  const allMesses = await getAllMesses();
 
   const summaries: MessSummary[] = [];
-  for (const m of messes) {
+  for (const m of allMesses) {
+    if (!m.published) continue;
+    if (types.length && !types.includes(m.type as MessType)) continue;
+    if (featuredOnly && !m.featured) continue;
+    if (m.rentFrom < budgetMin) continue;
+    if (m.rentTo > budgetMax) continue;
+    if (m.rating < minRating) continue;
+
+    // Build seats by walking rooms -> seats
+    const rooms = await getRoomsByMess(m.id);
     let totalSeats = 0;
     let availableSeats = 0;
-    for (const r of m.rooms) {
-      for (const s of r.seats) {
+    for (const r of rooms) {
+      const seats = await getSeatsByRoom(r.id);
+      for (const s of seats) {
         totalSeats++;
         if (s.status === "AVAILABLE") availableSeats++;
       }
     }
     if (onlyAvailable && availableSeats === 0) continue;
 
-    const messFacilities = JSON.parse(m.facilities || "[]") as string[];
-    if (facilities.length && !facilities.every((f) => messFacilities.includes(f))) continue;
+    const messFacilities = Array.isArray(m.facilities)
+      ? (m.facilities as string[])
+      : (() => {
+          try {
+            return JSON.parse((m.facilities as unknown as string) || "[]");
+          } catch {
+            return [];
+          }
+        })();
+    if (
+      facilities.length &&
+      !facilities.every((f) => messFacilities.includes(f))
+    )
+      continue;
 
     // radius filter
     if (centerLat !== null && centerLng !== null && radiusKm > 0) {
@@ -82,7 +99,15 @@ export async function GET(req: NextRequest) {
       if (d > radiusKm) continue;
     }
 
-    const images = JSON.parse(m.images || "[]") as string[];
+    const images = Array.isArray(m.images)
+      ? (m.images as string[])
+      : (() => {
+          try {
+            return JSON.parse((m.images as unknown as string) || "[]");
+          } catch {
+            return [];
+          }
+        })();
     summaries.push({
       id: m.id,
       name: m.name,

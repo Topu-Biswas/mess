@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import {
+  getUserById,
+  getMessesByOwner,
+  getPaymentsByMessIds,
+  getExpensesByOwner,
+  getBookingById,
+  getSeatById,
+  getMessById,
+  type FirestorePayment,
+} from "@/lib/firestore-db";
 
 // Owner finance overview — real income, expenses, profit, commission, dues
 export async function GET(req: NextRequest) {
@@ -7,24 +16,52 @@ export async function GET(req: NextRequest) {
   const months = Number(req.nextUrl.searchParams.get("months") ?? "3");
   if (!ownerId) return NextResponse.json({ error: "ownerId required" }, { status: 400 });
 
-  const owner = await db.user.findUnique({ where: { id: ownerId }, select: { commissionRate: true, name: true } });
+  const owner = await getUserById(ownerId);
   if (!owner) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const messes = await db.mess.findMany({ where: { ownerId }, select: { id: true, name: true } });
+  const messes = await getMessesByOwner(ownerId);
   const messIds = messes.map((m) => m.id);
 
   // All payments for this owner's messes
-  const payments = await db.payment.findMany({
-    where: { messId: { in: messIds } },
-    include: { booking: { include: { seeker: { select: { name: true, phone: true } }, seat: { include: { room: { include: { mess: { select: { name: true, area: true } } } } } } } } },
-    orderBy: { dueDate: "desc" },
+  const payments = await getPaymentsByMessIds(messIds);
+  // Sort by dueDate desc
+  payments.sort((a, b) => {
+    const at = a.dueDate?.toMillis?.() ?? 0;
+    const bt = b.dueDate?.toMillis?.() ?? 0;
+    return bt - at;
   });
 
-  // All expenses for this owner's messes
-  const expenses = await db.expense.findMany({
-    where: { messId: { in: messIds } },
-    orderBy: { date: "desc" },
+  // All expenses for this owner's messes (filter by ownerId to be safe)
+  const allOwnerExpenses = await getExpensesByOwner(ownerId);
+  const expenses = allOwnerExpenses;
+  expenses.sort((a, b) => {
+    const at = a.date?.toMillis?.() ?? 0;
+    const bt = b.date?.toMillis?.() ?? 0;
+    return bt - at;
   });
+
+  // Pre-fetch booking → seeker/seat/mess info for payments (cache by bookingId)
+  const bookingCache = new Map<string, { seekerName: string; seekerPhone: string | null; seatNumber: string; messName: string }>();
+  async function resolvePayment(p: FirestorePayment) {
+    if (bookingCache.has(p.bookingId)) return bookingCache.get(p.bookingId)!;
+    const booking = await getBookingById(p.bookingId);
+    let seekerName = "";
+    let seekerPhone: string | null = null;
+    let seatNumber = "";
+    let messName = "";
+    if (booking) {
+      const seeker = await getUserById(booking.seekerId);
+      seekerName = seeker?.name ?? "";
+      seekerPhone = seeker?.phone ?? null;
+      const seat = await getSeatById(booking.seatId);
+      seatNumber = seat?.number ?? "";
+      const mess = await getMessById(p.messId);
+      messName = mess?.name ?? "";
+    }
+    const info = { seekerName, seekerPhone, seatNumber, messName };
+    bookingCache.set(p.bookingId, info);
+    return info;
+  }
 
   const now = new Date();
 
@@ -33,13 +70,13 @@ export async function GET(req: NextRequest) {
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
   const currentMonthPayments = payments.filter(
-    (p) => p.paidDate && p.paidDate >= monthStart && p.paidDate < monthEnd && p.status === "PAID"
+    (p) => p.paidDate && p.paidDate.toDate() >= monthStart && p.paidDate.toDate() < monthEnd && p.status === "PAID"
   );
   const currentMonthIncome = currentMonthPayments
     .filter((p) => p.type === "RENT" || p.type === "DEPOSIT")
     .reduce((s, p) => s + p.amount, 0);
   const currentMonthExpenses = expenses
-    .filter((e) => e.date >= monthStart && e.date < monthEnd)
+    .filter((e) => e.date.toDate() >= monthStart && e.date.toDate() < monthEnd)
     .reduce((s, e) => s + e.amount, 0);
 
   // ---- Dues & overdue ----
@@ -71,13 +108,13 @@ export async function GET(req: NextRequest) {
     const mEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
     const monthLabel = mStart.toLocaleDateString("bn-BD", { month: "short", year: "numeric" });
     const mIncome = payments
-      .filter((p) => p.paidDate && p.paidDate >= mStart && p.paidDate < mEnd && p.status === "PAID" && (p.type === "RENT" || p.type === "DEPOSIT"))
+      .filter((p) => p.paidDate && p.paidDate.toDate() >= mStart && p.paidDate.toDate() < mEnd && p.status === "PAID" && (p.type === "RENT" || p.type === "DEPOSIT"))
       .reduce((s, p) => s + p.amount, 0);
     const mExp = expenses
-      .filter((e) => e.date >= mStart && e.date < mEnd)
+      .filter((e) => e.date.toDate() >= mStart && e.date.toDate() < mEnd)
       .reduce((s, e) => s + e.amount, 0);
     const mRentOnly = payments
-      .filter((p) => p.paidDate && p.paidDate >= mStart && p.paidDate < mEnd && p.status === "PAID" && p.type === "RENT")
+      .filter((p) => p.paidDate && p.paidDate.toDate() >= mStart && p.paidDate.toDate() < mEnd && p.status === "PAID" && p.type === "RENT")
       .reduce((s, p) => s + p.amount, 0);
     const mCommission = Math.round((mRentOnly * commissionRate) / 100);
     monthlyData.push({
@@ -104,6 +141,13 @@ export async function GET(req: NextRequest) {
     return { id: m.id, name: m.name, income: mIncome, expenses: mExpenses, net: mIncome - mExpenses };
   });
 
+  // Resolve payment -> booking/seeker/seat/mess for output (top 10 recent + overdue)
+  const recentPaymentsInfo = await Promise.all(payments.slice(0, 10).map(async (p) => ({ p, info: await resolvePayment(p) })));
+  const overdueInfo = await Promise.all(overduePayments.slice(0, 10).map(async (p) => ({ p, info: await resolvePayment(p) })));
+
+  const currentMonthRentAmount = currentMonthPayments.filter((p) => p.type === "RENT").reduce((s, p) => s + p.amount, 0);
+  const currentMonthCommission = Math.round((currentMonthRentAmount * commissionRate) / 100);
+
   return NextResponse.json({
     finance: {
       ownerName: owner.name,
@@ -111,8 +155,8 @@ export async function GET(req: NextRequest) {
       currentMonth: {
         income: currentMonthIncome,
         expenses: currentMonthExpenses,
-        commission: Math.round((currentMonthPayments.filter((p) => p.type === "RENT").reduce((s, p) => s + p.amount, 0) * commissionRate) / 100),
-        profit: currentMonthIncome - currentMonthExpenses - Math.round((currentMonthPayments.filter((p) => p.type === "RENT").reduce((s, p) => s + p.amount, 0) * commissionRate) / 100),
+        commission: currentMonthCommission,
+        profit: currentMonthIncome - currentMonthExpenses - currentMonthCommission,
       },
       totals: {
         collected: totalCollected,
@@ -128,29 +172,29 @@ export async function GET(req: NextRequest) {
       monthly: monthlyData,
       expenseByCat: Object.entries(expenseByCat).map(([cat, amount]) => ({ category: cat, amount })),
       perMess,
-      recentPayments: payments.slice(0, 10).map((p) => ({
+      recentPayments: recentPaymentsInfo.map(({ p, info }) => ({
         id: p.id,
         amount: p.amount,
         type: p.type,
         status: p.status,
         month: p.month,
         method: p.method,
-        seekerName: p.booking.seeker.name,
-        seekerPhone: p.booking.seeker.phone,
-        messName: p.booking.seat.room.mess.name,
-        seatNumber: p.booking.seat.number,
-        dueDate: p.dueDate.toISOString(),
-        paidDate: p.paidDate?.toISOString() ?? null,
+        seekerName: info.seekerName,
+        seekerPhone: info.seekerPhone,
+        messName: info.messName,
+        seatNumber: info.seatNumber,
+        dueDate: p.dueDate?.toDate?.()?.toISOString?.() ?? null,
+        paidDate: p.paidDate?.toDate?.()?.toISOString?.() ?? null,
       })),
-      overdueList: overduePayments.slice(0, 10).map((p) => ({
+      overdueList: overdueInfo.map(({ p, info }) => ({
         id: p.id,
         amount: p.amount,
         month: p.month,
-        seekerName: p.booking.seeker.name,
-        seekerPhone: p.booking.seeker.phone,
-        messName: p.booking.seat.room.mess.name,
-        seatNumber: p.booking.seat.number,
-        dueDate: p.dueDate.toISOString(),
+        seekerName: info.seekerName,
+        seekerPhone: info.seekerPhone,
+        messName: info.messName,
+        seatNumber: info.seatNumber,
+        dueDate: p.dueDate?.toDate?.()?.toISOString?.() ?? null,
       })),
     },
   });

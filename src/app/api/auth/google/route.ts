@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import {
+  getUserByEmail,
+  createUser,
+  updateUser,
+} from "@/lib/firestore-db";
 import type { PublicUser } from "@/lib/types";
 
 // POST /api/auth/google
@@ -15,7 +19,10 @@ export async function POST(req: NextRequest) {
   };
 
   if (!body.email && !body.name) {
-    return NextResponse.json({ error: "Firebase থেকে ইমেইল/নাম পাওয়া যায়নি" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Firebase থেকে ইমেইল/নাম পাওয়া যায়নি" },
+      { status: 400 }
+    );
   }
 
   const email = body.email ?? `${body.uid}@google.messfinder.bd`;
@@ -23,52 +30,36 @@ export async function POST(req: NextRequest) {
   const role = body.role ?? "SEEKER";
 
   // Try to find existing user by email
-  let user = await db.user.findFirst({ where: { email } });
+  let user = await getUserByEmail(email);
 
   if (!user) {
-    // Generate a unique phone-like identifier from firebase UID
     const phone = `g-${body.uid.slice(0, 11)}`;
-    try {
-      user = await db.user.create({
-        data: {
-          name,
-          phone,
-          email,
-          password: body.uid, // firebase UID as password placeholder (Google users don't use password login)
-          role,
-          status: role === "OWNER" ? "PENDING" : "ACTIVE",
-          avatar: body.photoURL,
-        },
-      });
-    } catch {
-      // phone collision — append random
-      user = await db.user.create({
-        data: {
-          name,
-          phone: `g-${body.uid.slice(0, 8)}${Math.floor(Math.random() * 99)}`,
-          email,
-          password: body.uid,
-          role,
-          status: role === "OWNER" ? "PENDING" : "ACTIVE",
-          avatar: body.photoURL,
-        },
-      });
-    }
+    user = await createUser({
+      name,
+      email,
+      phone,
+      photoURL: body.photoURL,
+      role,
+      status: role === "OWNER" ? "PENDING" : "ACTIVE",
+      commissionRate: role === "OWNER" ? 5.0 : 0,
+      preferredAreas: null,
+    });
   } else {
-    // Update avatar if changed
-    if (body.photoURL && user.avatar !== body.photoURL) {
-      user = await db.user.update({ where: { id: user.id }, data: { avatar: body.photoURL } });
+    // Update photoURL if changed
+    if (body.photoURL && user.photoURL !== body.photoURL) {
+      await updateUser(user.id, { photoURL: body.photoURL });
+      user = { ...user, photoURL: body.photoURL };
     }
   }
 
   const pub: PublicUser = {
     id: user.id,
     name: user.name,
-    phone: user.phone,
+    phone: user.phone ?? "",
     email: user.email,
     role: user.role as PublicUser["role"],
     status: user.status as PublicUser["status"],
-    avatar: user.avatar,
+    avatar: user.photoURL,
     preferredAreas: user.preferredAreas,
   };
 

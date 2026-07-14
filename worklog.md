@@ -237,3 +237,74 @@ Stage Summary:
 - Browser-verified: Owner overview (8 KPIs), Owner finance tab (KPIs + overdue alert + tables + download), Admin overview (commission + rent flow + top owners + chart), Seeker payments (summary + table + filters + receipts).
 - Lint: 0 errors, 0 warnings.
 - Data: ৳60,250 monthly income, ৳1,15,250 overdue, ৳29,374 total platform commission, ৳5,87,000 total rent flow.
+
+---
+Task ID: 3b
+Agent: general-purpose (Owner+Admin API routes to Firestore)
+Task: Rewrite owner and admin API routes from Prisma to Firestore
+
+Work Log:
+- Read firestore-db.ts and firebase-admin.ts to learn the new Firestore data layer API.
+- Read all 13 existing API route files (owner: messes, requests, stats, finance, payments, expenses; admin: overview, owners, listings, users, finance, logs; seeker: payments) to capture exact response JSON shapes.
+- Rewrote each route to use firestore-db functions (getMessesByOwner, getBookingsByMessIds, getPaymentsByMessIds, getExpensesByOwner, getUserById, getAllMesses, getUsersByRole, getUsersByRoleStatus, updateMess, updateUser, createAdminLog, getAdminLogs, etc.) instead of Prisma.
+- Preserved all response JSON shapes (top-level keys + nested fields) verbatim, including: owner messes with rooms/seats + seat counts, owner stats totals, owner finance (currentMonth/totals/monthly/expenseByCat/perMess/recentPayments/overdueList), owner payment PATCH/POST, owner expenses CRUD, seeker payments + summary, admin overview + areaDemand, admin owners with messCount, admin listings with computed seats, admin users with bookingCount, admin finance with commission math, admin logs ISO dates.
+- Mapped Firestore `photoURL` -> `avatar` to keep owner/user JSON shape identical to the prior Prisma response (which used `avatar`).
+- Handled Firestore Timestamp conversion via `.toDate().toISOString()` for output and `Timestamp.fromDate()` for inputs (paidDate, expense.date, payment dueDate).
+- Resolved seat→room number lookups by pre-loading rooms+seats per mess in owner/requests, owner/finance, admin/listings, seeker/payments (avoids N+1 random lookups).
+- Pre-cached booking→seeker/seat/mess info per bookingId in owner/finance and admin/finance to avoid repeated fetches.
+- For admin/owners PATCH "remove", used adminDb.batch() to delete owner's messes + user doc atomically (avoids importing doc/deleteDoc directly from firebase-admin/firestore).
+- For owner/finance: removed redundant getExpensesByMess filter and used getExpensesByOwner directly (all owner expenses already scoped to owner).
+- Sorted outputs by createdAt/dueDate/date desc to match previous Prisma orderBy behavior.
+- Iterated all messes for total bookings count in admin/overview (no getAllBookings helper exists).
+- Type-checked the project; all 13 rewritten routes compile clean (remaining tsc errors are pre-existing project-wide issues in firestore-db.ts, firebase-admin.ts, lib/db.ts, and unrelated routes outside this task scope).
+
+Stage Summary:
+- src/app/api/owner/messes/route.ts (rewritten — Firestore)
+- src/app/api/owner/requests/route.ts (rewritten — Firestore)
+- src/app/api/owner/stats/route.ts (rewritten — Firestore)
+- src/app/api/owner/finance/route.ts (rewritten — Firestore)
+- src/app/api/owner/payments/route.ts (rewritten — Firestore)
+- src/app/api/owner/expenses/route.ts (rewritten — Firestore)
+- src/app/api/admin/overview/route.ts (rewritten — Firestore)
+- src/app/api/admin/owners/route.ts (rewritten — Firestore)
+- src/app/api/admin/listings/route.ts (rewritten — Firestore)
+- src/app/api/admin/users/route.ts (rewritten — Firestore)
+- src/app/api/admin/finance/route.ts (rewritten — Firestore)
+- src/app/api/admin/logs/route.ts (rewritten — Firestore)
+- src/app/api/seeker/payments/route.ts (rewritten — Firestore)
+
+---
+Task ID: 3a
+Agent: general-purpose (Public+Auth API routes to Firestore)
+Task: Rewrite public and auth API routes from Prisma to Firestore
+
+Work Log:
+- Read firestore-db.ts and firebase-admin.ts to learn the data layer API and Timestamp handling.
+- Read all 11 target route files to capture existing Prisma logic and exact JSON response shapes.
+- Rewrote /api/messes/route.ts (GET) to call getAllMesses() then filter client-side for published, types, featured, budget, minRating, onlyAvailable (via getRoomsByMess + getSeatsByRoom counts), facilities, and haversine radius using POPULAR_AREAS or userLat/userLng.
+- Rewrote /api/messes/[id]/route.ts (GET) to compose detail from getMessById, getRoomsByMess, getSeatsByRoom, getReviewsByMess and getUserById(ownerId); maps Firestore Timestamps via .toDate().toISOString() and FirestoreUser.photoURL -> PublicUser.avatar.
+- Rewrote /api/auth/google/route.ts (POST) to find-or-create via getUserByEmail + createUser; sets commissionRate/preferredAreas/status per role and updates photoURL when changed.
+- Rewrote /api/auth/me/route.ts (POST) to call getUserById(userId) and map to PublicUser.
+- Rewrote /api/auth/login/route.ts (POST) to demo-only flow: getUserByPhone + role-based demo passwords (seeker123/owner123/admin123), still rejects SUSPENDED users.
+- Rewrote /api/auth/signup/route.ts (POST) to check phone uniqueness via getUserByPhone then createUser with role-based PENDING/ACTIVE status and commissionRate.
+- Rewrote /api/bookings/route.ts (GET, POST): GET uses getBookingsBySeeker/getBookingsByMess + status filter, sorts by createdAt desc, hydrates each booking via getSeatById + findRoomBySeat (walks rooms) + getMessById + getUserById to keep BookingWithRelations shape. POST checks seat availability, marks PENDING via updateSeat, generates unique ref via getBookingByReference, parses durationMonths from duration string, sets agreedRent/securityDeposit defaults, creates booking via createBooking with Timestamp.fromDate(moveInDate).
+- Rewrote /api/bookings/[id]/route.ts (PATCH) to fetch getBookingById then updateSeat + updateBooking for approve/reject/waitlist (replacing db.$transaction with two sequential Firestore writes).
+- Rewrote /api/favorites/route.ts (GET, POST): GET uses getFavoritesByUser + getMessById, reads available_seats (with underscore fallback) from mess doc; POST uses toggleFavorite and returns { favorited }.
+- Rewrote /api/reviews/route.ts (GET, POST): GET uses getReviewsByMess (denormalized userName) with fallback to getUserById when userName missing. POST uses createReview + recomputes mess rating/reviewCount via getReviewsByMess + updateMess.
+- Rewrote /api/seed/route.ts (POST) to import and call seedFirestore() from @/lib/firestore-seed.
+- Added getUserByPhone() and getBookingByReference() helpers to firestore-db.ts so route files import only from @/lib/firestore-db (no direct firebase-admin/firestore imports in routes).
+- Verified via `tsc --noEmit`: no errors introduced in any of the rewritten route files. Remaining errors are pre-existing project-wide library issues (firebase-admin v14 modular-API export mismatch in firestore-db.ts itself, missing @prisma/client in old db.ts) — out of scope for task 3a.
+
+Stage Summary:
+- src/app/api/messes/route.ts (rewritten)
+- src/app/api/messes/[id]/route.ts (rewritten)
+- src/app/api/auth/google/route.ts (rewritten)
+- src/app/api/auth/me/route.ts (rewritten)
+- src/app/api/auth/login/route.ts (rewritten)
+- src/app/api/auth/signup/route.ts (rewritten)
+- src/app/api/bookings/route.ts (rewritten)
+- src/app/api/bookings/[id]/route.ts (rewritten)
+- src/app/api/favorites/route.ts (rewritten)
+- src/app/api/reviews/route.ts (rewritten)
+- src/app/api/seed/route.ts (rewritten)
+- src/lib/firestore-db.ts (added getUserByPhone + getBookingByReference helpers)

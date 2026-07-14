@@ -1,29 +1,58 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import {
+  getAllMesses,
+  getMessById,
+  updateMess,
+  createAdminLog,
+  getUserById,
+  getRoomsByMess,
+  getSeatsByRoom,
+  type FirestoreMess,
+} from "@/lib/firestore-db";
 
 export async function GET(req: NextRequest) {
   const reported = req.nextUrl.searchParams.get("reported") === "true";
-  const where: Record<string, unknown> = {};
-  if (reported) where.reported = true;
-  const messes = await db.mess.findMany({
-    where,
-    include: { owner: true, rooms: { include: { seats: true } } },
-    orderBy: { createdAt: "desc" },
+  let messes = await getAllMesses();
+  if (reported) messes = messes.filter((m) => m.reported);
+  // Sort by createdAt desc
+  messes.sort((a, b) => {
+    const at = a.createdAt?.toMillis?.() ?? 0;
+    const bt = b.createdAt?.toMillis?.() ?? 0;
+    return bt - at;
   });
-  return NextResponse.json({
-    listings: messes.map((m) => {
+
+  // Build owner cache
+  const ownerCache = new Map<string, { name: string; status: string }>();
+  async function resolveOwner(ownerId: string) {
+    if (ownerCache.has(ownerId)) return ownerCache.get(ownerId)!;
+    const o = await getUserById(ownerId);
+    const info = { name: o?.name ?? "", status: o?.status ?? "" };
+    ownerCache.set(ownerId, info);
+    return info;
+  }
+
+  const listings = await Promise.all(
+    messes.map(async (m) => {
+      const ownerInfo = await resolveOwner(m.ownerId);
+      // Compute total/available seats
       let total = 0, available = 0;
-      for (const r of m.rooms) for (const s of r.seats) {
-        total++;
-        if (s.status === "AVAILABLE") available++;
-      }
-      const images = JSON.parse(m.images || "[]") as string[];
+      const rooms = await getRoomsByMess(m.id);
+      await Promise.all(
+        rooms.map(async (r) => {
+          const seats = await getSeatsByRoom(r.id);
+          for (const s of seats) {
+            total++;
+            if (s.status === "AVAILABLE") available++;
+          }
+        })
+      );
+      const images = m.images ?? [];
       return {
         id: m.id,
         name: m.name,
         area: m.area,
-        ownerName: m.owner.name,
-        ownerStatus: m.owner.status,
+        ownerName: ownerInfo.name,
+        ownerStatus: ownerInfo.status,
         type: m.type,
         rentFrom: m.rentFrom,
         rating: m.rating,
@@ -34,10 +63,12 @@ export async function GET(req: NextRequest) {
         image: images[0] ?? "",
         totalSeats: total,
         availableSeats: available,
-        createdAt: m.createdAt.toISOString(),
+        createdAt: m.createdAt?.toDate?.()?.toISOString?.() ?? null,
       };
-    }),
-  });
+    })
+  );
+
+  return NextResponse.json({ listings });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -45,7 +76,7 @@ export async function PATCH(req: NextRequest) {
     messId: string;
     action: "unpublish" | "publish" | "verify" | "unverify" | "dismiss-report";
   };
-  const data: Record<string, unknown> = {};
+  const data: Partial<FirestoreMess> = {};
   if (body.action === "unpublish") data.published = false;
   if (body.action === "publish") data.published = true;
   if (body.action === "verify") data.verified = true;
@@ -54,9 +85,8 @@ export async function PATCH(req: NextRequest) {
     data.reported = false;
     data.reportReason = null;
   }
-  const mess = await db.mess.update({ where: { id: body.messId }, data });
-  await db.adminLog.create({
-    data: { action: body.action.toUpperCase(), target: mess.name },
-  });
+  await updateMess(body.messId, data);
+  const mess = await getMessById(body.messId);
+  await createAdminLog(body.action.toUpperCase(), mess?.name ?? body.messId, null);
   return NextResponse.json({ ok: true });
 }
