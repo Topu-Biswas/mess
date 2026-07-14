@@ -42,7 +42,19 @@ export function AuthModal() {
       toast.success(`স্বাগতম, ${data.user.name}!`);
       closeAuth();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Google লগইন ব্যর্থ। Firebase Console-এ Google সাইন-ইন চালু আছে কিনা যাচাই করুন।");
+      const errMsg = err instanceof Error ? err.message : "";
+      if (errMsg.includes("auth/unauthorized-domain") || errMsg.includes("unauthorized-domain")) {
+        toast.error(
+          "এই ডোমেন Firebase Auth-এ অনুমোদিত নয়। Firebase Console → Authentication → Settings → Authorized domains-এ আপনার Vercel ডোমেন যোগ করুন।",
+          { duration: 8000 }
+        );
+      } else if (errMsg.includes("auth/popup-blocked") || errMsg.includes("popup-blocked")) {
+        toast.error("পপআপ ব্লক করা হয়েছে। ব্রাউজার সেটিংসে পপআপ অনুমোদন করুন।");
+      } else if (errMsg.includes("auth/operation-not-allowed") || errMsg.includes("operation-not-allowed")) {
+        toast.error("Google সাইন-ইন চালু নয়। Firebase Console → Authentication → Sign-in method → Google চালু করুন।", { duration: 8000 });
+      } else {
+        toast.error(errMsg || "Google লগইন ব্যর্থ। Firebase Console-এ Google সাইন-ইন চালু আছে কিনা যাচাই করুন।");
+      }
     } finally {
       setLoading(false);
     }

@@ -18,6 +18,7 @@ import { ContactView } from "@/components/views/contact";
 import { Toaster } from "@/components/ui/sonner";
 import { FirebaseProvider } from "@/components/firebase-provider";
 import { PWAInstall } from "@/components/pwa-install";
+import { SetupChecker } from "@/components/setup-checker";
 
 export default function Home() {
   const view = useAppStore((s) => s.view);
@@ -81,6 +82,7 @@ export default function Home() {
         {view !== "search" && <Footer />}
         <AuthModal />
         <PWAInstall />
+        <SetupChecker />
       </div>
     </FirebaseProvider>
   );
